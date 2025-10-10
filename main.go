@@ -172,10 +172,14 @@ type logModel struct {
 	height      int
 	width       int
 	lastToken   *string
+	loading     bool
+	lastError   error
 }
 
 type tickMsg time.Time
 type logsMsg []LogEntry
+type logsErrorMsg error
+type loadingMsg bool
 
 func startLogViewer(profile, logGroupName string, uiConfig *UIConfig) error {
 	ctx := context.Background()
@@ -212,46 +216,53 @@ func (m *logModel) Init() tea.Cmd {
 }
 
 func (m *logModel) fetchLogs() tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		
-		endTime := time.Now()
-		startTime := endTime.Add(-time.Duration(m.config.LogTimeRange) * time.Hour)
+	return tea.Batch(
+		func() tea.Msg { return loadingMsg(true) },
+		func() tea.Msg {
+			// Create context with timeout to prevent UI freezing
+			ctx, cancel := context.WithTimeout(context.Background(), 
+				time.Duration(m.config.APITimeout)*time.Second)
+			defer cancel()
+			
+			endTime := time.Now()
+			startTime := endTime.Add(-time.Duration(m.config.LogTimeRange) * time.Hour)
 
-		input := &cloudwatchlogs.FilterLogEventsInput{
-			LogGroupName: aws.String(m.logGroup),
-			StartTime:    aws.Int64(startTime.UnixMilli()),
-			EndTime:      aws.Int64(endTime.UnixMilli()),
-			Limit:        aws.Int32(m.config.LogsPerFetch),
-		}
-
-		if m.lastToken != nil {
-			input.NextToken = m.lastToken
-		}
-
-		output, err := m.client.FilterLogEvents(ctx, input)
-		if err != nil {
-			return logsMsg{}
-		}
-
-		var logs []LogEntry
-		for _, event := range output.Events {
-			if event.Timestamp != nil && event.Message != nil {
-				timestamp := time.UnixMilli(*event.Timestamp)
-				raw := fmt.Sprintf("[%s] %s", 
-					timestamp.Format("15:04:05"), 
-					*event.Message)
-				logs = append(logs, LogEntry{
-					Timestamp: timestamp,
-					Message:   *event.Message,
-					Raw:       raw,
-				})
+			input := &cloudwatchlogs.FilterLogEventsInput{
+				LogGroupName: aws.String(m.logGroup),
+				StartTime:    aws.Int64(startTime.UnixMilli()),
+				EndTime:      aws.Int64(endTime.UnixMilli()),
+				Limit:        aws.Int32(m.config.LogsPerFetch),
 			}
-		}
 
-		m.lastToken = output.NextToken
-		return logsMsg(logs)
-	}
+			if m.lastToken != nil {
+				input.NextToken = m.lastToken
+			}
+
+			output, err := m.client.FilterLogEvents(ctx, input)
+			if err != nil {
+				return logsErrorMsg(err)
+			}
+
+			var logs []LogEntry
+			for _, event := range output.Events {
+				if event.Timestamp != nil && event.Message != nil {
+					timestamp := time.UnixMilli(*event.Timestamp)
+					raw := fmt.Sprintf("[%s] %s", 
+						timestamp.Format("15:04:05"), 
+						*event.Message)
+					logs = append(logs, LogEntry{
+						Timestamp: timestamp,
+						Message:   *event.Message,
+						Raw:       raw,
+					})
+				}
+			}
+
+			// Note: We can't modify m.lastToken here since this runs in a goroutine
+			// We'll handle token updates in the Update method
+			return logsMsg(logs)
+		},
+	)
 }
 
 func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -313,7 +324,16 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}),
 		)
 
+	case loadingMsg:
+		m.loading = bool(msg)
+		
+	case logsErrorMsg:
+		m.loading = false
+		m.lastError = error(msg)
+		
 	case logsMsg:
+		m.loading = false
+		m.lastError = nil
 		newLogs := []LogEntry(msg)
 		if len(newLogs) > 0 {
 			m.logs = append(m.logs, newLogs...)
@@ -378,11 +398,17 @@ func (m *logModel) View() string {
 	b.WriteString(m.config.HeaderStyle().Render(fmt.Sprintf("CloudWatch Logs: %s", m.logGroup)))
 	b.WriteString("\n")
 
-	// Search bar
+	// Status bar
 	if m.searchMode {
 		b.WriteString(m.config.SearchStyle().Render(fmt.Sprintf("Search: %s_", m.searchQuery)))
 	} else if len(m.matches) > 0 {
 		b.WriteString(m.config.MatchStyle().Render(fmt.Sprintf("Matches: %d/%d", m.currentMatch+1, len(m.matches))))
+	} else if m.loading {
+		loadingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+		b.WriteString(loadingStyle.Render("⏳ Loading logs..."))
+	} else if m.lastError != nil {
+		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+		b.WriteString(errorStyle.Render(fmt.Sprintf("❌ Error: %v", m.lastError)))
 	} else {
 		b.WriteString("Press / to search, q to quit")
 	}

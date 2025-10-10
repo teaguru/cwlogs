@@ -15,6 +15,7 @@ type UIConfig struct {
 	MaxLogBuffer     int
 	LogsPerFetch     int32
 	LogTimeRange     int // hours
+	APITimeout       int // seconds
 	
 	// Colors
 	Colors ColorScheme
@@ -54,6 +55,7 @@ func NewUIConfig() *UIConfig {
 		MaxLogBuffer:    1000,
 		LogsPerFetch:    50,
 		LogTimeRange:    1,
+		APITimeout:      10, // 10 second timeout for AWS API calls
 		
 		// Colors
 		Colors: ColorScheme{
