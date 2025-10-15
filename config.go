@@ -60,9 +60,8 @@ type ColorScheme struct {
 	HeaderColor string // Color for the main header showing log group name
 	
 	// ========== SEARCH INTERFACE COLORS ==========
-	SearchColor     string // Color for search input text
-	SearchHighlight string // Color for search input background (unused currently)
-	MatchColor      string // Color for match counter display
+	SearchColor string // Color for search input text
+	MatchColor  string // Color for match counter display
 	
 	// ========== LOG LINE DISPLAY COLORS ==========
 	EvenRowColor   string // Text color for even-numbered log lines (zebra striping)
@@ -105,9 +104,8 @@ func NewUIConfig() *UIConfig {
 			HeaderColor: "12", // Blue - stands out for log group identification
 			
 			// Search interface colors  
-			SearchColor:     "11", // Yellow - bright and attention-grabbing for search mode
-			SearchHighlight: "11", // Yellow - currently unused but reserved for search input bg
-			MatchColor:      "10", // Green - positive color for successful matches
+			SearchColor: "11", // Yellow - bright and attention-grabbing for search mode
+			MatchColor:  "10", // Green - positive color for successful matches
 			
 			// Log line display colors (zebra striping for readability)
 			EvenRowColor:  "245", // Light gray - subtle for alternating rows
