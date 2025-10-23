@@ -114,8 +114,10 @@ make help         # Show all targets
 
 When selecting a log group, you can use:
 - `↑/↓` or `j/k` - Navigate through log groups
+- **Type** - Start filtering log groups by name (automatic)
 - `Enter` - Select log group
-- `r` - Change AWS region
+- `R` - Change AWS region
+- `Esc` - Clear filter (if filtering) or quit
 - `q` - Quit application
 
 ### Display Modes

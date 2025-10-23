@@ -105,26 +105,39 @@ func main() {
 		fmt.Printf("Selected AWS profile: %s\n", profile)
 	}
 	
-	// Show region info
+	// Initialize region - use CLI override or let AWS profile determine default
+	var currentRegion string
 	if region != "" {
-		fmt.Printf("Region override: %s\n", region)
+		currentRegion = region
+		fmt.Printf("Region override: %s\n", currentRegion)
 	} else {
 		fmt.Printf("Using region from profile configuration\n")
-	}
-
-	// List CloudWatch log groups
-	logGroups, err := listLogGroups(profile, region)
-	if err != nil {
-		handleError("listing CloudWatch log groups", err, profile)
-	}
-
-	if len(logGroups) == 0 {
-		fmt.Println("No log groups found")
-		return
+		// currentRegion stays empty, AWS SDK will use profile's default region
 	}
 
 	// Main loop to allow going back to log group selection and changing regions
 	for {
+		// List CloudWatch log groups for current region
+		logGroups, err := listLogGroups(profile, currentRegion)
+		if err != nil {
+			handleError("listing CloudWatch log groups", err, profile)
+		}
+
+		if len(logGroups) == 0 {
+			if currentRegion != "" {
+				fmt.Printf("No log groups found in region %s\n", currentRegion)
+			} else {
+				fmt.Println("No log groups found in default region")
+			}
+			// Still show the selector so user can change region
+		}
+
+		if currentRegion != "" {
+			fmt.Printf("Found %d log groups in region %s\n", len(logGroups), currentRegion)
+		} else {
+			fmt.Printf("Found %d log groups in default region\n", len(logGroups))
+		}
+
 		// Log group selection with region change support
 		chosenLogGroup, changeRegion, err := selectLogGroupInteractive(logGroups, uiConfig)
 		if err != nil {
@@ -145,21 +158,8 @@ func main() {
 				os.Exit(1)
 			}
 
-			region = newRegion
-			fmt.Printf("Selected region: %s\n", region)
-
-			// Refresh log groups for the new region
-			logGroups, err = listLogGroups(profile, region)
-			if err != nil {
-				handleError("listing CloudWatch log groups in new region", err, profile)
-			}
-
-			if len(logGroups) == 0 {
-				fmt.Printf("No log groups found in region %s\n", region)
-				continue
-			}
-
-			fmt.Printf("Found %d log groups in region %s\n", len(logGroups), region)
+			currentRegion = newRegion
+			fmt.Printf("Selected region: %s\n", currentRegion)
 			continue // Go back to log group selection with new region
 		}
 
@@ -169,7 +169,7 @@ func main() {
 		// Inner loop for log viewer (allows going back to log group selection)
 		for {
 			// Start the log viewer
-			exitCode, err := startLogViewer(profile, chosenLogGroup, region, uiConfig)
+			exitCode, err := startLogViewer(profile, chosenLogGroup, currentRegion, uiConfig)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error starting log viewer: %v\n", err)
 				os.Exit(1)
@@ -212,8 +212,7 @@ func startLogViewer(profile, logGroupName, region string, uiConfig *UIConfig) (i
 		logGroup:         logGroupName,
 		client:           client,
 		config:           uiConfig,
-		store:            NewLogStore(5000), // Fixed capacity ring buffer
-		logs:             []LogEntry{},      // Deprecated, kept for compatibility during migration
+		store:            newLogStore(5000), // Fixed capacity ring buffer
 		height:           uiConfig.DefaultHeight,
 		width:            uiConfig.DefaultWidth,
 		initialLoad:      true,

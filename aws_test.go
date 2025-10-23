@@ -126,7 +126,7 @@ func calculateTimeRange(now time.Time, hours int) (time.Time, time.Time) {
 }
 
 // Helper function for log event conversion
-func convertLogEvent(timestamp *int64, message *string, config *UIConfig) LogEntry {
+func convertLogEvent(timestamp *int64, message *string, config *UIConfig) logEntry {
 	var ts time.Time
 	var msg string
 	

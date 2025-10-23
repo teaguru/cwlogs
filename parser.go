@@ -15,8 +15,8 @@ var (
 	// Common Log Format: IP - - [timestamp] "METHOD path protocol" status size "referer" "user-agent"
 	accessLogRegex = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) ([^"]*) ([^"]*)" (\d+) (\S+) "([^"]*)" "([^"]*)"`)
 
-	// JSON object detection within log messages
-	jsonRegex = regexp.MustCompile(`\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}`)
+	// JSON object detection within log messages - simplified to avoid catastrophic backtracking
+	jsonRegex = regexp.MustCompile(`\{[^{}]{0,1000}\}`)
 )
 
 // AccessLogEntry represents a parsed access log entry
@@ -32,18 +32,41 @@ type AccessLogEntry struct {
 	UserAgent string
 }
 
-// LogEntry represents a log entry with original and formatted versions
-type LogEntry struct {
+// logEntry represents a log entry with original and formatted versions
+type logEntry struct {
 	Timestamp       time.Time
 	OriginalMessage string // Store the original unformatted message
 	Message         string // Store the formatted message
 	Raw             string // Store the complete display line
 }
 
-// isJSON checks if a string is valid JSON
+// isJSON checks if a string is valid JSON with safety checks
 func isJSON(s string) bool {
-	var js json.RawMessage
-	return json.Unmarshal([]byte(s), &js) == nil
+	// Quick checks to avoid expensive JSON parsing
+	if len(s) == 0 {
+		return false
+	}
+	
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return false
+	}
+	
+	// Avoid parsing very large JSON to prevent performance issues
+	if len(s) > 5000 {
+		return false
+	}
+	
+	// Quick check for obvious JSON patterns
+	first := s[0]
+	if first == '{' || first == '[' || first == '"' || 
+	   s == "null" || s == "true" || s == "false" ||
+	   (first >= '0' && first <= '9') || first == '-' {
+		var js json.RawMessage
+		return json.Unmarshal([]byte(s), &js) == nil
+	}
+	
+	return false
 }
 
 // formatJSON pretty-prints JSON with syntax highlighting
@@ -142,6 +165,12 @@ func formatLogMessage(message string, config *UIConfig) string {
 
 	message = strings.TrimSpace(message)
 
+	// Skip formatting for very long messages to prevent performance issues
+	const maxMessageLength = 10000
+	if len(message) > maxMessageLength {
+		return message
+	}
+
 	// Try access log parsing first
 	if config.ParseAccessLogs {
 		if accessEntry := parseAccessLog(message); accessEntry != nil {
@@ -151,27 +180,39 @@ func formatLogMessage(message string, config *UIConfig) string {
 
 	// Fall back to JSON formatting
 	if config.PrettyPrintJSON {
-		// Check if the entire message is JSON
-		if isJSON(message) {
+		// Check if the entire message is JSON (but only for reasonable sizes)
+		if len(message) < 5000 && isJSON(message) {
 			return formatJSON(message, config.JSONIndent)
 		}
 
-		// Look for JSON objects within the message
-		message = jsonRegex.ReplaceAllStringFunc(message, func(match string) string {
-			if isJSON(match) {
-				return formatJSON(match, config.JSONIndent)
-			}
-			return match
-		})
+		// Look for JSON objects within the message (with safety limits)
+		if len(message) < 5000 {
+			// Use a defer/recover to catch any potential panics from regex
+			func() {
+				defer func() {
+					if recover() != nil {
+						// If regex panics, just return the original message
+						return
+					}
+				}()
+				
+				message = jsonRegex.ReplaceAllStringFunc(message, func(match string) string {
+					if len(match) < 2000 && isJSON(match) {
+						return formatJSON(match, config.JSONIndent)
+					}
+					return match
+				})
+			}()
+		}
 	}
 
 	return message
 }
 
 // makeLogEntry creates log entries consistently
-func makeLogEntry(ts time.Time, originalMsg string, cfg *UIConfig) LogEntry {
+func makeLogEntry(ts time.Time, originalMsg string, cfg *UIConfig) logEntry {
 	formatted := formatLogMessage(originalMsg, cfg)
-	return LogEntry{
+	return logEntry{
 		Timestamp:       ts,
 		OriginalMessage: originalMsg,
 		Message:         formatted,

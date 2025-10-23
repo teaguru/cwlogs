@@ -13,7 +13,7 @@ import (
 type tickMsg time.Time
 type loadingMsg bool
 type logsWithTokenMsg struct {
-	logs      []LogEntry
+	logs      []logEntry
 	nextToken *string
 	isInitial bool
 }
@@ -27,18 +27,24 @@ type delayedSearchMsg struct {
 }
 
 type backToLogGroupsMsg struct{}
+type clearFormatStatusMsg struct{}
 
 // Commands
 func backToLogGroupsCmd() tea.Msg {
 	return backToLogGroupsMsg{}
 }
 
+func clearFormatStatusCmd() tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		return clearFormatStatusMsg{}
+	})
+}
+
 // logModel represents the state of the log viewer TUI
 type logModel struct {
 	profile          string
 	logGroup         string
-	store            *LogStore  // Ring buffer for bounded memory
-	logs             []LogEntry // Deprecated: use safeLogs() instead
+	store            *logStore  // Ring buffer for bounded memory
 	client           *cloudwatchlogs.Client
 	config           *UIConfig
 	cursor           int
@@ -57,15 +63,18 @@ type logModel struct {
 	followMode       bool
 	searchAttempt    int
 	currentTimeRange int
-	statusMessage    string
-	lastFormatState  bool           // Track last format state to avoid unnecessary reprocessing
-	highlighted      map[int]string // Cache of highlighted lines (by index)
-	lastSearchQuery  string         // Track last search query to avoid reprocessing
-	backToLogGroups  bool           // Flag to indicate user wants to go back to log group selection
+	statusMessage       string
+	formatStatusMsg     string         // Separate message for format toggle status
+	lastFormatState     bool           // Track last format state to avoid unnecessary reprocessing
+	needsLazyReprocess  bool           // Flag to indicate lazy reprocessing is needed
+	lastLazyReprocess   int            // Last cursor position where lazy reprocessing occurred
+	highlighted         map[int]string // Cache of highlighted lines (by index)
+	lastSearchQuery     string         // Track last search query to avoid reprocessing
+	backToLogGroups     bool           // Flag to indicate user wants to go back to log group selection
 }
 
 // safeLogs returns logs safely, never panics
-func (m *logModel) safeLogs() []LogEntry {
+func (m *logModel) safeLogs() []logEntry {
 	if m.store == nil {
 		return nil
 	}
@@ -92,6 +101,9 @@ func (m *logModel) fixCursor() {
 	if m.followMode {
 		m.cursor = len(logs) - 1
 	}
+
+	// Perform lazy reprocessing when cursor moves
+	m.lazyReprocessNearby()
 }
 
 // centerOnCursor recenters viewport on the current cursor
@@ -192,7 +204,7 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.followMode = true
 				m.fixCursor()
 			case "H":
-				return m, m.loadMoreHistory()
+				return m, m.fetchHistoryLogs()
 			case "end":
 				// Jump to latest logs (same as G but more intuitive)
 				m.followMode = true
@@ -244,23 +256,16 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.clearSearchState()
 				m.statusMessage = "Log buffer rolled over"
 
-				// Update logs slice first
-				m.logs = m.safeLogs()
 				m.fixCursor()
 
 				// Delay re-search until next frame for consistency
 				if oldQuery != "" {
 					m.searchQuery = oldQuery
-					return m, func() tea.Msg {
-						// Small delay to ensure store state is stable
-						time.Sleep(50 * time.Millisecond)
+					return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 						return delayedSearchMsg{oldQuery}
-					}
+					})
 				}
 			}
-
-			// Update logs slice for compatibility (will be removed later)
-			m.logs = m.safeLogs()
 
 			// Fix cursor after appending logs
 			m.fixCursor()
@@ -310,6 +315,11 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Set flag to indicate user wants to go back to log group selection
 		m.backToLogGroups = true
 		return m, tea.Quit
+
+	case clearFormatStatusMsg:
+		// Clear the format status message after timeout
+		m.formatStatusMsg = ""
+		return m, nil
 	}
 
 	return m, nil
@@ -329,47 +339,85 @@ func (m *logModel) toggleFormat() tea.Cmd {
 	// Only reprocess visible logs to prevent hanging
 	m.reprocessVisibleLogs()
 
+	// Mark that we need to reprocess other logs lazily
+	m.needsLazyReprocess = true
+
 	// Recalculate highlights if search is active
 	if len(m.matches) > 0 {
 		m.applyHighlights()
 	}
 
-	// Update status message
+	// Update format status message
 	if m.config.ParseAccessLogs {
-		m.statusMessage = "Formatted mode enabled"
+		m.formatStatusMsg = "Formatted mode enabled"
 	} else {
-		m.statusMessage = "Raw mode enabled"
+		m.formatStatusMsg = "Raw mode enabled"
 	}
 
-	// Force UI redraw by returning a no-op command
-	return func() tea.Msg { return nil }
+	// Return command to clear the format status after 2 seconds
+	return clearFormatStatusCmd()
 }
 
-// reprocessVisibleLogs regenerates all logs based on the current format setting
+// reprocessVisibleLogs regenerates visible logs based on the current format setting
 func (m *logModel) reprocessVisibleLogs() {
-	// Get current logs
 	logs := m.safeLogs()
 	if len(logs) == 0 {
 		return
 	}
 
-	// Reprocess each log entry in place
-	// This is fast in raw mode since it just trims whitespace
-	newStore := NewLogStore(5000)
-	for i := range logs {
-		entry := makeLogEntry(logs[i].Timestamp, logs[i].OriginalMessage, m.config)
-		newStore.Append(entry)
-	}
+	// Calculate visible range with generous buffer for smooth scrolling
+	const uiReservedHeight = 6 // Header + status + borders
+	viewportHeight := m.height - uiReservedHeight
+	bufferSize := viewportHeight * 2 // 2x viewport for smooth scrolling
+	
+	start := max(0, m.cursor - bufferSize)
+	end := min(len(logs), m.cursor + bufferSize)
 
-	// Replace store with reprocessed logs
-	m.store = newStore
-	m.logs = m.safeLogs()
+	// Only reprocess visible range + buffer for better performance
+	for i := start; i < end; i++ {
+		entry := makeLogEntry(logs[i].Timestamp, logs[i].OriginalMessage, m.config)
+		m.store.UpdateEntry(i, entry)
+	}
 }
 
-// lazyReprocessNearby processes a small batch of logs near the cursor
+// lazyReprocessNearby reprocesses logs near the cursor when needed
 func (m *logModel) lazyReprocessNearby() {
-	// Skip lazy reprocessing to prevent accumulation
-	// Only reprocess on explicit format toggle
+	if !m.needsLazyReprocess {
+		return
+	}
+
+	logs := m.safeLogs()
+	if len(logs) == 0 {
+		return
+	}
+
+	// Throttle lazy reprocessing - only reprocess if cursor moved significantly
+	const minCursorDelta = 10
+	if abs(m.cursor - m.lastLazyReprocess) < minCursorDelta {
+		return
+	}
+
+	// Calculate a small range around cursor for lazy reprocessing
+	const uiReservedHeight = 6
+	viewportHeight := m.height - uiReservedHeight
+	batchSize := max(30, viewportHeight/2) // Smaller batch size for better performance
+	
+	start := max(0, m.cursor - batchSize/2)
+	end := min(len(logs), start + batchSize)
+
+	// Reprocess small batch around cursor
+	for i := start; i < end; i++ {
+		entry := makeLogEntry(logs[i].Timestamp, logs[i].OriginalMessage, m.config)
+		m.store.UpdateEntry(i, entry)
+	}
+
+	// Update last reprocess position
+	m.lastLazyReprocess = m.cursor
+
+	// Check if we've processed all logs
+	if start == 0 && end == len(logs) {
+		m.needsLazyReprocess = false
+	}
 }
 
 // clearSearchState clears all search-related state
@@ -390,14 +438,5 @@ func (m *logModel) toggleFollow() {
 		if len(logs) > 0 {
 			m.cursor = len(logs) - 1
 		}
-	}
-}
-
-// reprocessLogs reformats all existing logs with current formatting settings
-func (m *logModel) reprocessLogs() {
-	for i := range m.logs {
-		entry := makeLogEntry(m.logs[i].Timestamp, m.logs[i].OriginalMessage, m.config)
-		m.logs[i].Message = entry.Message
-		m.logs[i].Raw = entry.Raw
 	}
 }

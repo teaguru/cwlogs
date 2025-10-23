@@ -10,8 +10,8 @@ import (
 )
 
 // Test data creation helpers
-func createTestLogEntry(message string) LogEntry {
-	return LogEntry{
+func createTestLogEntry(message string) logEntry {
+	return logEntry{
 		Timestamp:       time.Now(),
 		Message:         message,
 		OriginalMessage: message,
@@ -19,8 +19,8 @@ func createTestLogEntry(message string) LogEntry {
 	}
 }
 
-func createTestLogEntryWithTime(message string, timestamp time.Time) LogEntry {
-	return LogEntry{
+func createTestLogEntryWithTime(message string, timestamp time.Time) logEntry {
+	return logEntry{
 		Timestamp:       timestamp,
 		Message:         message,
 		OriginalMessage: message,
@@ -28,8 +28,8 @@ func createTestLogEntryWithTime(message string, timestamp time.Time) LogEntry {
 	}
 }
 
-func createTestLogStore(capacity int) *LogStore {
-	return NewLogStore(capacity)
+func createTestLogStore(capacity int) *logStore {
+	return newLogStore(capacity)
 }
 
 func createTestConfig() *UIConfig {
@@ -39,7 +39,7 @@ func createTestConfig() *UIConfig {
 func createTestLogModel(logGroup string) *logModel {
 	return &logModel{
 		logGroup:     logGroup,
-		store:        NewLogStore(5000),
+		store:        newLogStore(5000),
 		followMode:   true,
 		cursor:       0,
 		currentMatch: -1,
@@ -53,7 +53,7 @@ func createTestLogGroupSelector(logGroups []string) *logGroupSelectorModel {
 }
 
 // Assertion helpers
-func assertStoreLength(t *testing.T, store *LogStore, expected int) {
+func assertStoreLength(t *testing.T, store *logStore, expected int) {
 	t.Helper()
 	if got := store.Len(); got != expected {
 		t.Errorf("store length: got %d, want %d", got, expected)
@@ -117,7 +117,7 @@ func assertSliceLength(t *testing.T, slice interface{}, expected int, context st
 	t.Helper()
 	var length int
 	switch s := slice.(type) {
-	case []LogEntry:
+	case []logEntry:
 		length = len(s)
 	case []string:
 		length = len(s)
@@ -190,8 +190,8 @@ func indexOfSubstring(s, substr string) int {
 }
 
 // Test data generators
-func generateTestLogEntries(count int, prefix string) []LogEntry {
-	entries := make([]LogEntry, count)
+func generateTestLogEntries(count int, prefix string) []logEntry {
+	entries := make([]logEntry, count)
 	for i := 0; i < count; i++ {
 		entries[i] = createTestLogEntry(prefix + string(rune('A'+i)))
 	}

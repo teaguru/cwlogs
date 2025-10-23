@@ -21,8 +21,10 @@
 
 ### Log Group Selection
 - `↑↓` or `j/k` - Navigate through log groups
+- **Type** - Start filtering log groups by name (automatic)
 - `Enter` - Select log group
-- `r` - Change AWS region
+- `R` - Change AWS region
+- `Esc` - Clear filter (if filtering) or quit
 - `q` - Quit application
 
 ### Log Viewer
@@ -47,13 +49,24 @@
 ./cwlogs production
 
 # In log group selection:
-# 1. Press 'r' to change region
-# 2. Select us-west-2
-# 3. Choose /aws/lambda/api-service
-# 4. Debug issue in west coast
-# 5. Press 'b' to go back
-# 6. Press 'r' to switch to eu-west-1
-# 7. Compare same service in Europe
+# 1. Just type "lambda" to filter only Lambda function logs
+# 2. Press 'R' to change region if needed
+# 4. Select us-west-2
+# 5. Choose /aws/lambda/api-service
+# 6. Debug issue in west coast
+# 7. Press 'b' to go back
+# 8. Press 'R' to switch to eu-west-1
+# 9. Compare same service in Europe
+```
+
+### Log Group Filtering
+```bash
+# In log group selection screen:
+# 1. Just start typing: "lambda" shows only Lambda logs
+# 2. Continue typing "api" to further narrow to API-related logs
+# 3. Press 'Backspace' to delete characters
+# 4. Press 'Esc' to clear filter and show all groups
+# 5. Use ↑↓ to navigate filtered results
 ```
 
 ### Development Monitoring

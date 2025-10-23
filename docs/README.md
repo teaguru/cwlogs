@@ -27,7 +27,7 @@
 ```
 
 ### Navigation
-- **Log Group Selection**: `↑↓/j/k` navigate, `Enter` select, `r` change region
+- **Log Group Selection**: `↑↓/j/k` navigate, **type** to filter, `Enter` select, `R` change region
 - **Log Viewer**: `↑↓/j/k` scroll, `/` search, `b` back, `q` quit
 - **Search**: `n/N` next/prev match, `Esc` clear
 

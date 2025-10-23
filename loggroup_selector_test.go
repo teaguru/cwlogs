@@ -74,12 +74,12 @@ func TestLogGroupSelectorRegionChange(t *testing.T) {
 	model := newLogGroupSelector(logGroups, config)
 	
 	// Test region change key
-	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}}
 	updatedModel, cmd := model.Update(keyMsg)
 	
 	if m, ok := updatedModel.(*logGroupSelectorModel); ok {
 		if !m.changeRegion {
-			t.Error("Expected changeRegion to be true after 'r' key")
+			t.Error("Expected changeRegion to be true after 'R' key")
 		}
 	} else {
 		t.Error("Expected model to be *logGroupSelectorModel type")

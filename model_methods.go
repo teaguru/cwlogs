@@ -13,6 +13,34 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// UI layout constants to replace magic numbers
+const (
+	uiReservedHeight = 6 // Header + status + borders + padding
+	contentPadding   = 8 // Left/right padding for content
+)
+
+// Helper functions
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
 // ANSI escape sequence regex for cleaning colored text before search
 var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
@@ -67,7 +95,7 @@ func (m *logModel) fetchLogs() tea.Cmd {
 				return err
 			}
 
-			var logs []LogEntry
+			var logs []logEntry
 			for _, event := range output.Events {
 				if event.Timestamp != nil && event.Message != nil {
 					timestamp := time.UnixMilli(*event.Timestamp)
@@ -81,8 +109,8 @@ func (m *logModel) fetchLogs() tea.Cmd {
 	)
 }
 
-// loadMoreHistory loads older logs by extending the time range
-func (m *logModel) loadMoreHistory() tea.Cmd {
+// fetchHistoryLogs loads older logs by extending the time range
+func (m *logModel) fetchHistoryLogs() tea.Cmd {
 	return func() tea.Msg {
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(),
@@ -105,7 +133,7 @@ func (m *logModel) loadMoreHistory() tea.Cmd {
 			return err
 		}
 
-		var logs []LogEntry
+		var logs []logEntry
 		for _, event := range output.Events {
 			if event.Timestamp != nil && event.Message != nil {
 				timestamp := time.UnixMilli(*event.Timestamp)
@@ -203,7 +231,10 @@ func (m *logModel) performSearch() {
 
 	if len(m.matches) > 0 {
 		m.currentMatch = 0
-		m.cursor = m.matches[0]
+		// Defensive bounds check
+		if m.currentMatch < len(m.matches) {
+			m.cursor = m.matches[0]
+		}
 		m.followMode = false // Prevent tick from overwriting cursor
 		m.centerOnCursor()   // Center viewport on found match
 		m.statusMessage = fmt.Sprintf("Found %d matches", len(m.matches))
@@ -222,7 +253,11 @@ func (m *logModel) nextMatch() {
 		return
 	}
 	m.currentMatch = (m.currentMatch + 1) % len(m.matches)
-	m.cursor = m.matches[m.currentMatch]
+	
+	// Bounds check before accessing matches array
+	if m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
+		m.cursor = m.matches[m.currentMatch]
+	}
 	m.followMode = false        // Disable follow persistently
 	m.centerOnCursor()          // Center viewport on match
 	m.refreshCurrentHighlight() // Refresh visible highlight
@@ -234,7 +269,11 @@ func (m *logModel) prevMatch() {
 		return
 	}
 	m.currentMatch = (m.currentMatch - 1 + len(m.matches)) % len(m.matches)
-	m.cursor = m.matches[m.currentMatch]
+	
+	// Bounds check before accessing matches array
+	if m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
+		m.cursor = m.matches[m.currentMatch]
+	}
 	m.followMode = false        // Disable follow persistently
 	m.centerOnCursor()          // Center viewport on match
 	m.refreshCurrentHighlight() // Refresh visible highlight
@@ -264,6 +303,10 @@ func (m *logModel) View() string {
 		statusBar = m.config.MatchStyle().
 			Render(fmt.Sprintf("Matches: %d/%d (follow disabled) | n=next, N=prev, /=new search",
 				m.currentMatch+1, len(m.matches)))
+	case m.formatStatusMsg != "":
+		statusBar = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("10")).
+			Render(fmt.Sprintf("⚙️  %s", m.formatStatusMsg))
 	case m.statusMessage != "":
 		statusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("11")).
@@ -299,14 +342,15 @@ func (m *logModel) View() string {
 	}
 
 	// Calculate viewport
-	start := m.cursor - (m.height-6)/2 // Account for header, status, and border
+	viewportHeight := m.height - uiReservedHeight
+	start := m.cursor - viewportHeight/2 // Center cursor in viewport
 	if start < 0 {
 		start = 0
 	}
-	end := start + (m.height - 6) // Reserve space for UI elements
+	end := start + viewportHeight // Reserve space for UI elements
 	if end > len(logs) {
 		end = len(logs)
-		start = end - (m.height - 6)
+		start = end - viewportHeight
 		if start < 0 {
 			start = 0
 		}
@@ -326,9 +370,9 @@ func (m *logModel) View() string {
 		}
 
 		// 2) Soft-wrap BEFORE styling so styles don't get re-rendered
-		if m.width > 8 {
+		if m.width > contentPadding {
 			line = lipgloss.NewStyle().
-				MaxWidth(m.width - 8).
+				MaxWidth(m.width - contentPadding).
 				Render(line)
 		}
 
@@ -414,6 +458,11 @@ func (m *logModel) applyHighlights() {
 // refreshCurrentHighlight updates only the current match highlight
 func (m *logModel) refreshCurrentHighlight() {
 	if len(m.matches) == 0 || m.searchRegex == nil {
+		return
+	}
+	
+	// Bounds check for currentMatch
+	if m.currentMatch < 0 || m.currentMatch >= len(m.matches) {
 		return
 	}
 

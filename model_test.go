@@ -38,7 +38,7 @@ func TestCursorManagement(t *testing.T) {
 	
 	// Add some test logs
 	for i := 0; i < 5; i++ {
-		entry := LogEntry{
+		entry := logEntry{
 			Timestamp:       time.Now(),
 			Message:         "test message",
 			OriginalMessage: "test message",
@@ -71,7 +71,7 @@ func TestFollowMode(t *testing.T) {
 	
 	// Add logs
 	for i := 0; i < 3; i++ {
-		entry := LogEntry{
+		entry := logEntry{
 			Timestamp:       time.Now(),
 			Message:         "test message",
 			OriginalMessage: "test message",
@@ -143,7 +143,7 @@ func TestSafeLogs(t *testing.T) {
 	
 	// Add some logs
 	for i := 0; i < 3; i++ {
-		entry := LogEntry{
+		entry := logEntry{
 			Timestamp:       time.Now(),
 			Message:         "test message",
 			OriginalMessage: "test message",
@@ -193,7 +193,7 @@ func TestBackToLogGroups(t *testing.T) {
 func newLogModel(logGroup string, config *UIConfig) *logModel {
 	return &logModel{
 		logGroup:     logGroup,
-		store:        NewLogStore(config.MaxLogBuffer),
+		store:        newLogStore(config.MaxLogBuffer),
 		followMode:   true,
 		cursor:       0,
 		currentMatch: -1,

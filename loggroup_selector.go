@@ -10,22 +10,25 @@ import (
 
 // logGroupSelectorModel represents the log group selection TUI
 type logGroupSelectorModel struct {
-	logGroups    []string
-	cursor       int
-	selected     string
-	width        int
-	height       int
-	changeRegion bool
-	quit         bool
-	config       *UIConfig
+	logGroups       []string
+	filteredGroups  []string
+	cursor          int
+	selected        string
+	width           int
+	height          int
+	changeRegion    bool
+	quit            bool
+	config          *UIConfig
+	searchQuery     string
 }
 
 // newLogGroupSelector creates a new log group selector
 func newLogGroupSelector(logGroups []string, config *UIConfig) *logGroupSelectorModel {
 	return &logGroupSelectorModel{
-		logGroups: logGroups,
-		cursor:    0,
-		config:    config,
+		logGroups:      logGroups,
+		filteredGroups: logGroups, // Initially show all groups
+		cursor:         0,
+		config:         config,
 	}
 }
 
@@ -47,7 +50,7 @@ func (m *logGroupSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quit = true
 			return m, tea.Quit
 
-		case "r":
+		case "R":
 			m.changeRegion = true
 			return m, tea.Quit
 
@@ -57,17 +60,46 @@ func (m *logGroupSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.cursor < len(m.logGroups)-1 {
+			if m.cursor < len(m.filteredGroups)-1 {
 				m.cursor++
 			}
 
 		case "enter":
-			m.selected = m.logGroups[m.cursor]
-			return m, tea.Quit
+			if len(m.filteredGroups) > 0 {
+				m.selected = m.filteredGroups[m.cursor]
+				return m, tea.Quit
+			}
 
 		case "esc":
-			m.quit = true
-			return m, tea.Quit
+			if m.searchQuery != "" {
+				// Clear search
+				m.searchQuery = ""
+				m.filteredGroups = m.logGroups
+				m.cursor = 0
+			} else {
+				m.quit = true
+				return m, tea.Quit
+			}
+
+		case "backspace":
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				m.filterLogGroups()
+			}
+
+		default:
+			// Auto-start search when typing alphanumeric characters
+			if len(msg.Runes) > 0 {
+				char := msg.Runes[0]
+				// Check if it's a printable character (letters, numbers, common symbols)
+				if (char >= 'a' && char <= 'z') || 
+				   (char >= 'A' && char <= 'Z') || 
+				   (char >= '0' && char <= '9') || 
+				   char == '-' || char == '_' || char == '/' || char == '.' {
+					m.searchQuery += string(msg.Runes)
+					m.filterLogGroups()
+				}
+			}
 		}
 	}
 
@@ -87,10 +119,19 @@ func (m *logGroupSelectorModel) View() string {
 	b.WriteString(title)
 	b.WriteString("\n\n")
 
-	// Instructions
-	instructions := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
-		Render("Use ↑↓ or j/k to navigate, Enter to select, r to change region, q to quit")
+	// Instructions and search status
+	var instructions string
+	if m.searchQuery != "" {
+		instructions = fmt.Sprintf("Filter: %s_ | Esc to clear, Enter to select", m.searchQuery)
+		instructions = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("11")).
+			Render(instructions)
+	} else {
+		instructions = "Type to filter, ↑↓/j/k to navigate, Enter to select, R to change region, q to quit"
+		instructions = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("8")).
+			Render(instructions)
+	}
 	
 	b.WriteString(instructions)
 	b.WriteString("\n\n")
@@ -102,17 +143,17 @@ func (m *logGroupSelectorModel) View() string {
 	}
 
 	start := 0
-	end := len(m.logGroups)
+	end := len(m.filteredGroups)
 
 	// Calculate visible window
-	if len(m.logGroups) > maxVisible {
+	if len(m.filteredGroups) > maxVisible {
 		start = m.cursor - maxVisible/2
 		if start < 0 {
 			start = 0
 		}
 		end = start + maxVisible
-		if end > len(m.logGroups) {
-			end = len(m.logGroups)
+		if end > len(m.filteredGroups) {
+			end = len(m.filteredGroups)
 			start = end - maxVisible
 			if start < 0 {
 				start = 0
@@ -120,9 +161,17 @@ func (m *logGroupSelectorModel) View() string {
 		}
 	}
 
-	// Render visible log groups
-	for i := start; i < end; i++ {
-		logGroup := m.logGroups[i]
+	// Show "no results" message if filtered list is empty
+	if len(m.filteredGroups) == 0 {
+		noResults := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("8")).
+			Render("No log groups match your search")
+		b.WriteString(noResults)
+		b.WriteString("\n")
+	} else {
+		// Render visible log groups
+		for i := start; i < end; i++ {
+			logGroup := m.filteredGroups[i]
 		
 		// Truncate long log group names
 		maxWidth := m.width - 4
@@ -144,11 +193,17 @@ func (m *logGroupSelectorModel) View() string {
 			b.WriteString(fmt.Sprintf("  %s", logGroup))
 		}
 		b.WriteString("\n")
+		}
 	}
 
 	// Show scroll indicator if needed
-	if len(m.logGroups) > maxVisible {
-		scrollInfo := fmt.Sprintf("\n[%d/%d log groups]", m.cursor+1, len(m.logGroups))
+	if len(m.filteredGroups) > maxVisible {
+		scrollInfo := fmt.Sprintf("\n[%d/%d log groups", m.cursor+1, len(m.filteredGroups))
+		if m.searchQuery != "" {
+			scrollInfo += fmt.Sprintf(" of %d total]", len(m.logGroups))
+		} else {
+			scrollInfo += "]"
+		}
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(lipgloss.Color("8")).
 			Render(scrollInfo))
@@ -156,12 +211,38 @@ func (m *logGroupSelectorModel) View() string {
 
 	// Controls
 	b.WriteString("\n\n")
-	controls := lipgloss.NewStyle().
+	var controls string
+	if m.searchQuery != "" {
+		controls = "Type to filter | Backspace: delete | Esc: clear | Enter: select | q: quit"
+	} else {
+		controls = "Type to filter | ↑↓/j/k: navigate | Enter: select | R: change region | q: quit"
+	}
+	b.WriteString(lipgloss.NewStyle().
 		Foreground(lipgloss.Color("8")).
-		Render("↑↓/j/k: navigate | Enter: select | r: change region | q: quit")
-	b.WriteString(controls)
+		Render(controls))
 
 	return b.String()
+}
+
+// filterLogGroups filters the log groups based on the search query
+func (m *logGroupSelectorModel) filterLogGroups() {
+	if m.searchQuery == "" {
+		m.filteredGroups = m.logGroups
+		m.cursor = 0
+		return
+	}
+
+	m.filteredGroups = []string{}
+	query := strings.ToLower(m.searchQuery)
+	
+	for _, group := range m.logGroups {
+		if strings.Contains(strings.ToLower(group), query) {
+			m.filteredGroups = append(m.filteredGroups, group)
+		}
+	}
+	
+	// Reset cursor to top of filtered results
+	m.cursor = 0
 }
 
 // selectLogGroupInteractive shows an interactive log group selector
