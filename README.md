@@ -306,12 +306,13 @@ The application is designed for long-running sessions:
 - Automatic cleanup of old logs
 - Responsive UI even with high log volume
 
-## Development
+## Documentation
 
-For developers interested in contributing or understanding the internals:
-- See [DEVELOPER.md](DEVELOPER.md) for detailed architecture documentation
-- See [TESTING.md](TESTING.md) for test coverage and approach
-- Run `make test` to execute the test suite
+- [Usage Guide](docs/USAGE.md) - Advanced features and workflows
+- [AWS Setup](docs/AWS-SETUP.md) - Configure AWS credentials and profiles
+- [Developer Guide](docs/DEVELOPER.md) - Architecture and implementation details
+- [Testing](docs/TESTING.md) - Test coverage and approach
+- [Deployment](docs/DEPLOYMENT.md) - Building and publishing releases
 
 ## License
 
