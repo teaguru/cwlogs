@@ -1,4 +1,4 @@
-module aws-cw-logs
+module github.com/teaguru/cwlogs
 
 go 1.24.0
 

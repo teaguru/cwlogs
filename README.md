@@ -22,10 +22,12 @@ A fast, terminal-based viewer for AWS CloudWatch logs with real-time streaming a
 ### Build from Source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/teaguru/cwlogs.git
 cd cwlogs
-go build -o cwlogs
+make build
 ```
+
+Or use `go build` directly if Make is unavailable.
 
 ## Usage
 
@@ -39,6 +41,21 @@ The application will:
 1. Show available AWS profiles
 2. Let you select a CloudWatch log group
 3. Start streaming logs in real-time
+
+Check version:
+```bash
+./cwlogs --version
+```
+
+### Makefile Targets
+
+```bash
+make build        # Build binary
+make test         # Run tests
+make lint         # Check code quality
+make release      # Build release archives for all platforms
+make help         # Show all targets
+```
 
 ### Controls
 
@@ -73,7 +90,7 @@ Shows original CloudWatch log messages exactly as received:
 ```
 
 #### Formatted Mode
-Parses and colorizes structured logs:
+Parses and colourises structured logs:
 ```
 [12:34:56] GET /api/users 200 2.3ms - Mozilla/5.0...
 [12:34:57] POST /api/login 401 1.1ms - Invalid credentials
@@ -85,7 +102,7 @@ Parses and colorizes structured logs:
 - **Regex support** - Use regular expressions for complex patterns
 - **Dual-mode search** - Works in both raw and formatted modes
 - **Highlight preservation** - Search highlights remain visible when navigating
-- **Auto-centering** - Found matches automatically center in viewport
+- **Auto-centring** - Found matches automatically centre in viewport
 
 ### Follow Mode
 
@@ -184,8 +201,11 @@ The application is designed for long-running sessions:
 
 ## Development
 
-For developers interested in contributing or understanding the internals, see [DEVELOPER.md](DEVELOPER.md) for detailed architecture documentation.
+For developers interested in contributing or understanding the internals:
+- See [DEVELOPER.md](DEVELOPER.md) for detailed architecture documentation
+- See [TESTING.md](TESTING.md) for test coverage and approach
+- Run `make test` to execute the test suite
 
 ## License
 
-[Add your license here]
+Apache License 2.0 - See [LICENSE](LICENSE) file for details.

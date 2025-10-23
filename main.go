@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -8,7 +9,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Version is the application version, can be overridden at build time
+var Version = "dev"
+
 func main() {
+	// Parse command-line flags
+	flagVersion := flag.Bool("version", false, "show version")
+	flag.Parse()
+
+	// Handle version flag
+	if *flagVersion {
+		fmt.Printf("cwlogs version %s\n", Version)
+		os.Exit(0)
+	}
+
 	// Load configuration
 	uiConfig := NewUIConfig()
 

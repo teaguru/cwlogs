@@ -42,7 +42,7 @@ func (s *LogStore) Slice() []LogEntry {
 		// Not full yet, return as-is
 		return s.entries
 	}
-	
+
 	// Full buffer, need to linearize circular structure
 	result := make([]LogEntry, s.capacity)
 	copy(result, s.entries[s.start:])

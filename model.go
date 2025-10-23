@@ -30,8 +30,8 @@ type delayedSearchMsg struct {
 type logModel struct {
 	profile          string
 	logGroup         string
-	store            *LogStore           // Ring buffer for bounded memory
-	logs             []LogEntry          // Deprecated: use safeLogs() instead
+	store            *LogStore  // Ring buffer for bounded memory
+	logs             []LogEntry // Deprecated: use safeLogs() instead
 	client           *cloudwatchlogs.Client
 	config           *UIConfig
 	cursor           int
@@ -51,9 +51,9 @@ type logModel struct {
 	searchAttempt    int
 	currentTimeRange int
 	statusMessage    string
-	lastFormatState  bool                // Track last format state to avoid unnecessary reprocessing
-	highlighted      map[int]string      // Cache of highlighted lines (by index)
-	lastSearchQuery  string              // Track last search query to avoid reprocessing
+	lastFormatState  bool           // Track last format state to avoid unnecessary reprocessing
+	highlighted      map[int]string // Cache of highlighted lines (by index)
+	lastSearchQuery  string         // Track last search query to avoid reprocessing
 }
 
 // safeLogs returns logs safely, never panics
@@ -71,7 +71,7 @@ func (m *logModel) fixCursor() {
 		m.cursor = 0
 		return
 	}
-	
+
 	// Clamp cursor to valid range
 	if m.cursor >= len(logs) {
 		m.cursor = len(logs) - 1
@@ -79,7 +79,7 @@ func (m *logModel) fixCursor() {
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
-	
+
 	// Follow mode: always track latest
 	if m.followMode {
 		m.cursor = len(logs) - 1
@@ -226,17 +226,17 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					wrapped = true
 				}
 			}
-			
+
 			// If buffer wrapped, invalidate search state
 			if wrapped {
 				oldQuery := m.searchQuery
 				m.clearSearchState()
 				m.statusMessage = "Log buffer rolled over"
-				
+
 				// Update logs slice first
 				m.logs = m.safeLogs()
 				m.fixCursor()
-				
+
 				// Delay re-search until next frame for consistency
 				if oldQuery != "" {
 					m.searchQuery = oldQuery
@@ -253,7 +253,7 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Fix cursor after appending logs
 			m.fixCursor()
-			
+
 			// Always scroll to bottom when follow mode is on
 			if m.followMode {
 				logs := m.safeLogs()
@@ -336,7 +336,7 @@ func (m *logModel) reprocessVisibleLogs() {
 	if len(logs) == 0 {
 		return
 	}
-	
+
 	// Reprocess each log entry in place
 	// This is fast in raw mode since it just trims whitespace
 	newStore := NewLogStore(5000)
@@ -344,7 +344,7 @@ func (m *logModel) reprocessVisibleLogs() {
 		entry := makeLogEntry(logs[i].Timestamp, logs[i].OriginalMessage, m.config)
 		newStore.Append(entry)
 	}
-	
+
 	// Replace store with reprocessed logs
 	m.store = newStore
 	m.logs = m.safeLogs()
@@ -354,7 +354,6 @@ func (m *logModel) reprocessVisibleLogs() {
 func (m *logModel) lazyReprocessNearby() {
 	// Skip lazy reprocessing to prevent accumulation
 	// Only reprocess on explicit format toggle
-	return
 }
 
 // clearSearchState clears all search-related state

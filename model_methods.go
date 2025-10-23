@@ -184,10 +184,10 @@ func (m *logModel) performSearch() {
 	for i, log := range logs {
 		// Search in both original message and clean display text (without ANSI codes)
 		searchTargets := []string{
-			log.OriginalMessage,    // Always search the original CloudWatch message
-			stripANSI(log.Raw),     // Search the displayed content without ANSI escape codes
+			log.OriginalMessage, // Always search the original CloudWatch message
+			stripANSI(log.Raw),  // Search the displayed content without ANSI escape codes
 		}
-		
+
 		found := false
 		for _, target := range searchTargets {
 			if regex.MatchString(target) {
@@ -195,7 +195,7 @@ func (m *logModel) performSearch() {
 				break
 			}
 		}
-		
+
 		if found {
 			m.matches = append(m.matches, i)
 		}
@@ -205,7 +205,7 @@ func (m *logModel) performSearch() {
 		m.currentMatch = 0
 		m.cursor = m.matches[0]
 		m.followMode = false // Prevent tick from overwriting cursor
-		m.centerOnCursor() // Center viewport on found match
+		m.centerOnCursor()   // Center viewport on found match
 		m.statusMessage = fmt.Sprintf("Found %d matches", len(m.matches))
 	} else {
 		m.statusMessage = fmt.Sprintf("No matches found for '%s'", m.searchQuery)
@@ -223,8 +223,8 @@ func (m *logModel) nextMatch() {
 	}
 	m.currentMatch = (m.currentMatch + 1) % len(m.matches)
 	m.cursor = m.matches[m.currentMatch]
-	m.followMode = false // Disable follow persistently
-	m.centerOnCursor() // Center viewport on match
+	m.followMode = false        // Disable follow persistently
+	m.centerOnCursor()          // Center viewport on match
 	m.refreshCurrentHighlight() // Refresh visible highlight
 }
 
@@ -235,8 +235,8 @@ func (m *logModel) prevMatch() {
 	}
 	m.currentMatch = (m.currentMatch - 1 + len(m.matches)) % len(m.matches)
 	m.cursor = m.matches[m.currentMatch]
-	m.followMode = false // Disable follow persistently
-	m.centerOnCursor() // Center viewport on match
+	m.followMode = false        // Disable follow persistently
+	m.centerOnCursor()          // Center viewport on match
 	m.refreshCurrentHighlight() // Refresh visible highlight
 }
 
@@ -244,7 +244,7 @@ func (m *logModel) prevMatch() {
 func (m *logModel) View() string {
 	// Crash-proof rendering: skip frame instead of panic
 	defer func() { recover() }()
-	
+
 	// Guard against invalid dimensions
 	if m.width <= 0 || m.height <= 0 {
 		return "Initializing..."
@@ -385,6 +385,7 @@ func (m *logModel) View() string {
 		borderedLogs,
 	)
 }
+
 // applyHighlights precomputes highlighted lines for search matches
 func (m *logModel) applyHighlights() {
 	if m.searchRegex == nil {
@@ -400,12 +401,12 @@ func (m *logModel) applyHighlights() {
 		}
 		original := logs[idx].Raw
 		clean := stripANSI(original)
-		
+
 		// Apply highlights to clean text
 		highlighted := m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
 			return m.config.HighlightStyle().Render(match)
 		})
-		
+
 		m.highlighted[idx] = highlighted
 	}
 }
@@ -424,12 +425,12 @@ func (m *logModel) refreshCurrentHighlight() {
 
 	original := logs[idx].Raw
 	clean := stripANSI(original)
-	
+
 	// Apply highlights to clean text
 	highlighted := m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
 		return m.config.HighlightStyle().Render(match)
 	})
-	
+
 	m.highlighted[idx] = highlighted
 }
 
@@ -458,7 +459,7 @@ func renderControlsBar(m *logModel) string {
 		"/ search, Esc clear, n/N next/prev, J format (%s), F follow (%s), H history, q quit%s",
 		formatStatus, followStatus, logInfo,
 	)
-	
+
 	// Ensure controls bar never wraps
 	return lipgloss.NewStyle().
 		MaxWidth(m.width).

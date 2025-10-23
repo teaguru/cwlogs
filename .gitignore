@@ -1,0 +1,23 @@
+# Binaries
+cwlogs
+cwlogs-*
+
+# Release artefacts
+dist/
+*.tar.gz
+*.zip
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+.kiro/
+*.swp
+*.swo
+*~
+
+# Test coverage
+*.out
+coverage.html

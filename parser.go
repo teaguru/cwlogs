@@ -120,7 +120,7 @@ func formatAccessLog(entry *AccessLogEntry, config *UIConfig) string {
 	}
 
 	// Better styling for different elements
-	ipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))   // Cyan for IP
+	ipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))    // Cyan for IP
 	pathStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15")) // White for path
 	sizeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))  // Gray for size
 
@@ -139,7 +139,7 @@ func formatLogMessage(message string, config *UIConfig) string {
 	if !config.ParseAccessLogs && !config.PrettyPrintJSON {
 		return strings.TrimSpace(message)
 	}
-	
+
 	message = strings.TrimSpace(message)
 
 	// Try access log parsing first
