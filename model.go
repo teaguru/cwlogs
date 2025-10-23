@@ -26,6 +26,13 @@ type delayedSearchMsg struct {
 	query string
 }
 
+type backToLogGroupsMsg struct{}
+
+// Commands
+func backToLogGroupsCmd() tea.Msg {
+	return backToLogGroupsMsg{}
+}
+
 // logModel represents the state of the log viewer TUI
 type logModel struct {
 	profile          string
@@ -54,6 +61,7 @@ type logModel struct {
 	lastFormatState  bool           // Track last format state to avoid unnecessary reprocessing
 	highlighted      map[int]string // Cache of highlighted lines (by index)
 	lastSearchQuery  string         // Track last search query to avoid reprocessing
+	backToLogGroups  bool           // Flag to indicate user wants to go back to log group selection
 }
 
 // safeLogs returns logs safely, never panics
@@ -153,6 +161,9 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				// Clear search results and return to normal browsing
 				m.clearSearchState()
+			case "b", "backspace":
+				// Return to log group selection
+				return m, backToLogGroupsCmd
 			case "n":
 				m.nextMatch()
 				m.followMode = false
@@ -294,6 +305,11 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastError = fmt.Errorf("no logs found in the last %s", timeRangeText)
 			m.statusMessage = ""
 		}
+
+	case backToLogGroupsMsg:
+		// Set flag to indicate user wants to go back to log group selection
+		m.backToLogGroups = true
+		return m, tea.Quit
 	}
 
 	return m, nil

@@ -44,7 +44,7 @@ func displayConnectionSuccess(profile, logGroup string) {
 	fmt.Println()
 	printStyled("Controls: ↑↓/j/k=scroll, PgUp/PgDn=fast scroll, g=top, G/End=latest\n"+
 		"          /=search, Esc=clear search, n/N=next/prev match\n"+
-		"          J=format toggle, F=follow toggle, H=load history, q=quit\n\n"+
+		"          J=format toggle, F=follow toggle, H=load history, b=back, q=quit\n\n"+
 		"💡 Auto-follow turns OFF when you scroll up, ON when you reach bottom\n"+
 		"💡 Use mouse to select text for copy/paste (Ctrl+C in most terminals)", "15", false)
 }

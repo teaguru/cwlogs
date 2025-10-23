@@ -33,19 +33,48 @@ Or use `go build` directly if Make is unavailable.
 
 ### Basic Usage
 
+**Interactive mode (default):**
 ```bash
 ./cwlogs
 ```
 
 The application will:
-1. Show available AWS profiles
+1. Show available AWS profiles (if multiple exist)
 2. Let you select a CloudWatch log group
 3. Start streaming logs in real-time
 
-Check version:
+**Specify AWS profile:**
+```bash
+./cwlogs --profile myprofile    # Using flag
+./cwlogs myprofile              # Using positional argument (shorter)
+```
+
+**Specify AWS region:**
+```bash
+./cwlogs --profile dev --region us-west-2    # Using flags
+./cwlogs dev us-west-2                       # Using positional arguments (shorter)
+```
+
+**Show help:**
+```bash
+./cwlogs --help
+```
+
+**Check version:**
 ```bash
 ./cwlogs --version
 ```
+
+### Command-Line Options
+
+| Option/Argument | Description | Example |
+|-----------------|-------------|---------|
+| `profile` | AWS profile name (positional argument) | `cwlogs production` |
+| `region` | AWS region (positional argument) | `cwlogs production us-west-2` |
+| `--profile <name>` | Use specific AWS profile (flag alternative) | `--profile production` |
+| `--region <name>` | Use specific AWS region (overrides profile default) | `--region us-east-1` |
+| `--version` | Show version information | `--version` |
+| `--help` | Show help and usage examples | `--help` |
 
 ### Makefile Targets
 
@@ -78,6 +107,15 @@ make help         # Show all targets
 - `H` - Load more history
 
 #### Other
+- `b` or `Backspace` - Go back to log group selection
+- `q` - Quit application
+
+### Log Group Selection Controls
+
+When selecting a log group, you can use:
+- `↑/↓` or `j/k` - Navigate through log groups
+- `Enter` - Select log group
+- `r` - Change AWS region
 - `q` - Quit application
 
 ### Display Modes
@@ -116,15 +154,36 @@ When **Follow Mode** is enabled (press `F`):
 
 ### AWS Setup
 
-Ensure your AWS credentials are configured:
+The application supports multiple AWS credential configurations:
 
+**Option 1: Simple setup (most common)**
 ```bash
-# Using AWS CLI
+# Configure default credentials
 aws configure
-
-# Or using AWS SSO
-aws sso login --profile your-profile
+# Enter your Access Key ID, Secret Access Key, region, and output format
 ```
+
+**Option 2: Named profiles**
+```bash
+# Configure a named profile
+aws configure --profile myprofile
+```
+
+**Option 3: AWS SSO**
+```bash
+# Configure SSO profile
+aws configure sso --profile mysso
+aws sso login --profile mysso
+```
+
+**Option 4: Environment variables**
+```bash
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+The application will automatically detect available profiles and let you choose, or use the default profile if only one is configured.
 
 ### Required Permissions
 
@@ -154,6 +213,38 @@ Your AWS user/role needs these CloudWatch permissions:
 3. **Toggle formats** (`J`) to see both raw and parsed views
 4. **Load history** (`H`) to see older logs when needed
 
+### Command-Line Efficiency
+
+**Quick access to specific environments:**
+```bash
+# Development environment (shorter syntax)
+./cwlogs dev
+
+# Production monitoring in specific region
+./cwlogs prod us-west-2
+
+# Staging logs in different region
+./cwlogs staging eu-west-1
+
+# Alternative flag syntax
+./cwlogs --profile production --region us-east-1
+```
+
+**Automation and scripting:**
+```bash
+#!/bin/bash
+# Monitor production logs in specific region
+echo "Starting production log monitoring..."
+./cwlogs production us-west-2
+```
+
+**Integration with other tools:**
+```bash
+# Use with AWS SSO in specific region
+aws sso login --profile company-admin
+./cwlogs company-admin eu-central-1
+```
+
 ### Search Best Practices
 
 - Use specific terms to narrow results quickly
@@ -172,14 +263,30 @@ Your AWS user/role needs these CloudWatch permissions:
 
 ### Common Issues
 
+**"No AWS profiles found"**
+- Run `aws configure` to set up default credentials
+- Check that `~/.aws/credentials` or `~/.aws/config` exists
+- Verify AWS CLI is installed: `aws --version`
+
 **"No log groups found"**
 - Check AWS credentials and permissions
 - Verify you have access to CloudWatch Logs in the selected region
+- Try: `aws logs describe-log-groups` to test access
 
 **"AWS SSO session expired"**
 ```bash
 aws sso login --profile <your-profile>
 ```
+
+**"Failed to load AWS configuration"**
+- Check your AWS region is set: `aws configure get region`
+- Verify credentials: `aws sts get-caller-identity`
+- For environment variables, ensure all required vars are set
+
+**"No log groups found" (region-specific)**
+- Verify you're looking in the correct region: `./cwlogs profile us-west-2`
+- Check if logs exist in that region: `aws logs describe-log-groups --region us-west-2`
+- CloudWatch logs are region-specific - try different regions
 
 **Logs not updating in real-time**
 - Check if Follow Mode is enabled (press `F`)

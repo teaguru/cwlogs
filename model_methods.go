@@ -455,12 +455,37 @@ func renderControlsBar(m *logModel) string {
 		logInfo = fmt.Sprintf(" | %d/%d logs", m.cursor+1, len(logs))
 	}
 
-	controlsText := fmt.Sprintf(
-		"/ search, Esc clear, n/N next/prev, J format (%s), F follow (%s), H history, q quit%s",
-		formatStatus, followStatus, logInfo,
+	// Build help text with priority order (most important commands first)
+	essentialControls := fmt.Sprintf("b back, q quit%s", logInfo)
+	
+	// Try different levels of detail based on available width
+	fullControls := fmt.Sprintf(
+		"/ search, Esc clear, n/N next, J fmt (%s), F follow (%s), H hist, %s",
+		formatStatus, followStatus, essentialControls,
 	)
+	
+	mediumControls := fmt.Sprintf(
+		"/ search, n/N next, J fmt (%s), F follow (%s), %s",
+		formatStatus, followStatus, essentialControls,
+	)
+	
+	shortControls := fmt.Sprintf(
+		"/ search, J fmt (%s), F follow (%s), %s",
+		formatStatus, followStatus, essentialControls,
+	)
+	
+	// Choose the longest version that fits
+	var controlsText string
+	if len(fullControls) <= m.width {
+		controlsText = fullControls
+	} else if len(mediumControls) <= m.width {
+		controlsText = mediumControls
+	} else if len(shortControls) <= m.width {
+		controlsText = shortControls
+	} else {
+		controlsText = essentialControls // Always show back and quit
+	}
 
-	// Ensure controls bar never wraps
 	return lipgloss.NewStyle().
 		MaxWidth(m.width).
 		Render(controlsText)

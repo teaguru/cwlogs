@@ -158,6 +158,37 @@ func TestSafeLogs(t *testing.T) {
 	}
 }
 
+// Test back to log groups functionality
+func TestBackToLogGroups(t *testing.T) {
+	config := NewUIConfig()
+	model := newLogModel("test", config)
+	
+	// Initially should not want to go back
+	if model.backToLogGroups {
+		t.Error("Expected backToLogGroups to be false initially")
+	}
+	
+	// Simulate back key press by sending backToLogGroupsMsg
+	msg := backToLogGroupsMsg{}
+	updatedModel, cmd := model.Update(msg)
+	
+	// Should set the flag and return quit command
+	if logModel, ok := updatedModel.(*logModel); ok {
+		if !logModel.backToLogGroups {
+			t.Error("Expected backToLogGroups to be true after back message")
+		}
+	} else {
+		t.Error("Expected model to be *logModel type")
+	}
+	
+	// Should return tea.Quit command
+	if cmd == nil {
+		t.Error("Expected quit command to be returned")
+	}
+}
+
+
+
 // Helper functions for model creation
 func newLogModel(logGroup string, config *UIConfig) *logModel {
 	return &logModel{

@@ -16,6 +16,27 @@ type mockLogEvent struct {
 	message   string
 }
 
+// Test profile name processing
+func TestTrimProfilePrefix(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"profile myprofile", "myprofile"},
+		{"profile dev", "dev"},
+		{"default", "default"},
+		{"myprofile", "myprofile"},
+		{"profile ", ""},
+	}
+	
+	for _, tt := range tests {
+		result := trimProfilePrefix(tt.input)
+		if result != tt.expected {
+			t.Errorf("trimProfilePrefix(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
 // Test log group name validation
 func TestValidateLogGroupName(t *testing.T) {
 	tests := []struct {

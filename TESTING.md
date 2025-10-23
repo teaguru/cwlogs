@@ -65,19 +65,35 @@ Tests follow Go conventions: `*_test.go` files in the same directory as the code
 - Time handling and conversion
 - Log entry creation from AWS data
 
+### `loggroup_selector_test.go` - Log Group Selector Tests
+**4 tests covering log group selection TUI:**
+
+1. **Selector initialization** - Initial state setup
+2. **Navigation** - Up/down movement through log groups
+3. **Region change** - Region switching from log group menu
+4. **Selection** - Log group selection functionality
+
+**What's protected:**
+- Log group selector initialization
+- Navigation and cursor management
+- Region change functionality
+- Selection and quit behavior
+
 ### `model_test.go` - Model State Tests
-**5 tests covering TUI model state:**
+**6 tests covering TUI model state:**
 
 1. **Model initialization** - Initial state setup
 2. **Cursor management** - Bounds checking and positioning
 3. **Follow mode behavior** - Auto-scroll functionality
 4. **Search state management** - Search state lifecycle
 5. **Safe logs access** - Thread-safe log retrieval
+6. **Back to log groups** - Navigation back to log group selection
 
 **What's protected:**
 - Model initialization and state
 - Cursor bounds and follow mode
 - Search functionality
+- Navigation and back functionality
 - Memory safety
 
 ## Running Tests
@@ -87,12 +103,30 @@ make test              # Run all tests
 make test-coverage     # Generate HTML coverage report
 ```
 
+### `main_test.go` - Command-Line Tests
+**8 tests covering CLI argument parsing:**
+
+1. **Version flag parsing** - `--version` flag handling
+2. **Profile flag parsing** - `--profile <name>` flag handling  
+3. **Help flag parsing** - `--help` flag handling
+4. **No flags parsing** - Default behavior validation
+5. **Positional argument parsing** - `cwlogs <profile>` handling
+6. **Mixed flag and positional** - Flag precedence validation
+7. **Region flag parsing** - `--region <name>` flag handling
+8. **Profile and region positional** - `cwlogs <profile> <region>` handling
+
+**What's protected:**
+- Command-line argument parsing
+- Flag validation and defaults
+- Positional argument handling (profile and region)
+- CLI interface consistency
+
 ## Results
 
 ```
-25 tests, 25 passed, 0 failed
-Coverage: 9.9% of statements
-Runtime: ~0.4s with race detector
+38 tests, 38 passed, 0 failed
+Coverage: 9.8% of statements
+Runtime: ~0.8s with race detector
 ```
 
 ## Coverage Analysis

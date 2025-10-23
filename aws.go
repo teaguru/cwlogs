@@ -13,31 +13,62 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-// selectAWSProfile reads AWS config, extracts profiles, and lets user select one
+// selectAWSProfile reads AWS config and credentials, extracts profiles, and lets user select one
 func selectAWSProfile(uiConfig *UIConfig) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 
-	path := filepath.Join(home, ".aws", "config")
-	cfg, err := ini.Load(path)
-	if err != nil {
-		return "", fmt.Errorf("failed to read AWS config file at %s: %w", path, err)
-	}
+	profiles := make(map[string]bool) // Use map to avoid duplicates
 
-	var profiles []string
-	for _, section := range cfg.Sections() {
-		name := section.Name()
-		if name == "DEFAULT" {
-			profiles = append(profiles, "default")
-			continue
+	// Check ~/.aws/config for profiles
+	configPath := filepath.Join(home, ".aws", "config")
+	if cfg, err := ini.Load(configPath); err == nil {
+		for _, section := range cfg.Sections() {
+			name := section.Name()
+			if name == "DEFAULT" {
+				profiles["default"] = true
+			} else {
+				profiles[trimProfilePrefix(name)] = true
+			}
 		}
-		profiles = append(profiles, trimProfilePrefix(name))
 	}
 
-	if len(profiles) == 0 {
-		return "", fmt.Errorf("no AWS profiles found in %s", path)
+	// Check ~/.aws/credentials for profiles (common with `aws configure`)
+	credentialsPath := filepath.Join(home, ".aws", "credentials")
+	if creds, err := ini.Load(credentialsPath); err == nil {
+		for _, section := range creds.Sections() {
+			name := section.Name()
+			if name != "DEFAULT" && name != "" {
+				profiles[name] = true
+			} else if name == "DEFAULT" {
+				profiles["default"] = true
+			}
+		}
+	}
+
+	// Convert map to slice
+	var profileList []string
+	for profile := range profiles {
+		profileList = append(profileList, profile)
+	}
+
+	// If no profiles found, try to use default
+	if len(profileList) == 0 {
+		// Check if we can load default AWS config (environment variables, etc.)
+		ctx := context.Background()
+		if _, err := config.LoadDefaultConfig(ctx); err == nil {
+			profileList = append(profileList, "default")
+		} else {
+			return "", fmt.Errorf("no AWS profiles found and default configuration failed: %w\n\nPlease run 'aws configure' or set up AWS credentials", err)
+		}
+	}
+
+	// If only one profile, use it automatically
+	if len(profileList) == 1 {
+		fmt.Printf("Using AWS profile: %s\n\n", profileList[0])
+		return profileList[0], nil
 	}
 
 	// Display profile selection title
@@ -47,7 +78,7 @@ func selectAWSProfile(uiConfig *UIConfig) (string, error) {
 	var chosen string
 	prompt := &survey.Select{
 		Message:  "Select AWS profile:",
-		Options:  profiles,
+		Options:  profileList,
 		PageSize: uiConfig.ProfilePageSize,
 	}
 	err = survey.AskOne(prompt, &chosen)
@@ -58,20 +89,16 @@ func selectAWSProfile(uiConfig *UIConfig) (string, error) {
 	return chosen, nil
 }
 
-// listLogGroups lists CloudWatch log groups for the selected profile
-func listLogGroups(profile string) ([]string, error) {
-	ctx := context.Background()
-
-	// Load AWS config with the selected profile
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
+// listLogGroups lists CloudWatch log groups for the selected profile and optional region
+func listLogGroups(profile string, region ...string) ([]string, error) {
+	// Use the updated createCloudWatchClient function
+	client, err := createCloudWatchClient(profile, region...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS configuration for profile '%s': %w", profile, err)
+		return nil, err
 	}
 
-	// Create CloudWatch Logs client
-	client := cloudwatchlogs.NewFromConfig(cfg)
-
 	// List log groups
+	ctx := context.Background()
 	var logGroups []string
 	paginator := cloudwatchlogs.NewDescribeLogGroupsPaginator(client, &cloudwatchlogs.DescribeLogGroupsInput{})
 
@@ -91,14 +118,66 @@ func listLogGroups(profile string) ([]string, error) {
 	return logGroups, nil
 }
 
-// createCloudWatchClient creates a CloudWatch Logs client for the given profile
-func createCloudWatchClient(profile string) (*cloudwatchlogs.Client, error) {
+// createCloudWatchClient creates a CloudWatch Logs client for the given profile and optional region
+func createCloudWatchClient(profile string, region ...string) (*cloudwatchlogs.Client, error) {
 	ctx := context.Background()
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
+	
+	// Start with profile configuration
+	configOptions := []func(*config.LoadOptions) error{
+		config.WithSharedConfigProfile(profile),
+	}
+	
+	// Override region if provided
+	if len(region) > 0 && region[0] != "" {
+		configOptions = append(configOptions, config.WithRegion(region[0]))
+	}
+	
+	cfg, err := config.LoadDefaultConfig(ctx, configOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration for profile '%s': %w", profile, err)
 	}
+	
 	return cloudwatchlogs.NewFromConfig(cfg), nil
+}
+
+// selectAWSRegion lets user select an AWS region
+func selectAWSRegion(uiConfig *UIConfig) (string, error) {
+	// Common AWS regions
+	regions := []string{
+		"us-east-1",      // N. Virginia
+		"us-east-2",      // Ohio
+		"us-west-1",      // N. California
+		"us-west-2",      // Oregon
+		"eu-west-1",      // Ireland
+		"eu-west-2",      // London
+		"eu-west-3",      // Paris
+		"eu-central-1",   // Frankfurt
+		"eu-north-1",     // Stockholm
+		"ap-southeast-1", // Singapore
+		"ap-southeast-2", // Sydney
+		"ap-northeast-1", // Tokyo
+		"ap-northeast-2", // Seoul
+		"ap-south-1",     // Mumbai
+		"ca-central-1",   // Canada
+		"sa-east-1",      // São Paulo
+	}
+
+	// Display region selection title
+	printStyled("🌍 AWS Region Selection", "12", true)
+	fmt.Println()
+
+	var chosen string
+	prompt := &survey.Select{
+		Message:  "Select AWS region:",
+		Options:  regions,
+		PageSize: uiConfig.ProfilePageSize,
+	}
+	err := survey.AskOne(prompt, &chosen)
+	if err != nil {
+		return "", fmt.Errorf("failed to select region: %w", err)
+	}
+
+	return chosen, nil
 }
 
 // trimProfilePrefix removes "profile " prefix from AWS config section names
