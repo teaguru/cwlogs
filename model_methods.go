@@ -191,11 +191,17 @@ func (m *logModel) performSearch() {
 		return
 	}
 
-	// Skip reprocessing if the query hasn't changed
-	if m.searchQuery == m.lastSearchQuery {
+	// Skip reprocessing if the query hasn't changed AND we don't need lazy reprocessing
+	if m.searchQuery == m.lastSearchQuery && !m.needsLazyReprocess {
 		return
 	}
 	m.lastSearchQuery = m.searchQuery
+
+	// If we need lazy reprocessing, force complete reprocessing before search
+	// to ensure search results are accurate
+	if m.needsLazyReprocess {
+		m.forceCompleteReprocess()
+	}
 
 	regex, err := regexp.Compile("(?i)" + regexp.QuoteMeta(m.searchQuery))
 	if err != nil {
@@ -244,7 +250,6 @@ func (m *logModel) performSearch() {
 
 	// Precompute highlighted lines
 	m.applyHighlights()
-	m.refreshCurrentHighlight() // Ensure visible repaint
 }
 
 // nextMatch moves to the next search match
@@ -260,7 +265,7 @@ func (m *logModel) nextMatch() {
 	}
 	m.followMode = false        // Disable follow persistently
 	m.centerOnCursor()          // Center viewport on match
-	m.refreshCurrentHighlight() // Refresh visible highlight
+	m.applyHighlights()         // Refresh all highlights with new current match
 }
 
 // prevMatch moves to the previous search match
@@ -276,7 +281,7 @@ func (m *logModel) prevMatch() {
 	}
 	m.followMode = false        // Disable follow persistently
 	m.centerOnCursor()          // Center viewport on match
-	m.refreshCurrentHighlight() // Refresh visible highlight
+	m.applyHighlights()         // Refresh all highlights with new current match
 }
 
 // View renders the TUI
@@ -439,6 +444,13 @@ func (m *logModel) applyHighlights() {
 
 	logs := m.safeLogs()
 	m.highlighted = make(map[int]string, len(m.matches))
+	
+	// Get current match index for special highlighting
+	var currentMatchIdx int = -1
+	if len(m.matches) > 0 && m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
+		currentMatchIdx = m.matches[m.currentMatch]
+	}
+	
 	for _, idx := range m.matches {
 		if idx < 0 || idx >= len(logs) {
 			continue
@@ -446,42 +458,25 @@ func (m *logModel) applyHighlights() {
 		original := logs[idx].Raw
 		clean := stripANSI(original)
 
-		// Apply highlights to clean text
-		highlighted := m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
-			return m.config.HighlightStyle().Render(match)
-		})
+		// Apply highlights to clean text - use different style for current match
+		var highlighted string
+		if idx == currentMatchIdx {
+			// Current match gets special highlighting
+			highlighted = m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
+				return m.config.CurrentMatchStyle().Render(match)
+			})
+		} else {
+			// Regular matches get normal highlighting
+			highlighted = m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
+				return m.config.HighlightStyle().Render(match)
+			})
+		}
 
 		m.highlighted[idx] = highlighted
 	}
 }
 
-// refreshCurrentHighlight updates only the current match highlight
-func (m *logModel) refreshCurrentHighlight() {
-	if len(m.matches) == 0 || m.searchRegex == nil {
-		return
-	}
-	
-	// Bounds check for currentMatch
-	if m.currentMatch < 0 || m.currentMatch >= len(m.matches) {
-		return
-	}
 
-	logs := m.safeLogs()
-	idx := m.matches[m.currentMatch]
-	if idx < 0 || idx >= len(logs) {
-		return
-	}
-
-	original := logs[idx].Raw
-	clean := stripANSI(original)
-
-	// Apply highlights to clean text
-	highlighted := m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
-		return m.config.HighlightStyle().Render(match)
-	})
-
-	m.highlighted[idx] = highlighted
-}
 
 // renderControlsBar builds the controls/help line shown at the bottom of the TUI.
 // It reuses the same menu for both formatted and raw modes.

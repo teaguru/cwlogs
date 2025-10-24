@@ -148,3 +148,7 @@ func (c *UIConfig) CursorStyle() lipgloss.Style {
 func (c *UIConfig) HighlightStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Background(lipgloss.Color(c.Colors.MatchBgColor)).Foreground(lipgloss.Color(c.Colors.MatchFgColor))
 }
+
+func (c *UIConfig) CurrentMatchStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color("196")).Foreground(lipgloss.Color("15")).Bold(true)
+}

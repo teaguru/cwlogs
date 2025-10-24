@@ -420,12 +420,30 @@ func (m *logModel) lazyReprocessNearby() {
 	}
 }
 
+// forceCompleteReprocess reprocesses all logs immediately (used before search)
+func (m *logModel) forceCompleteReprocess() {
+	logs := m.safeLogs()
+	if len(logs) == 0 {
+		return
+	}
+
+	// Reprocess all logs to ensure search accuracy
+	for i := 0; i < len(logs); i++ {
+		entry := makeLogEntry(logs[i].Timestamp, logs[i].OriginalMessage, m.config)
+		m.store.UpdateEntry(i, entry)
+	}
+
+	// Mark lazy reprocessing as complete
+	m.needsLazyReprocess = false
+}
+
 // clearSearchState clears all search-related state
 func (m *logModel) clearSearchState() {
 	m.searchRegex = nil
 	m.matches = nil
 	m.currentMatch = 0
 	m.highlighted = make(map[int]string) // Clear highlight cache
+	m.lastSearchQuery = ""              // Clear last search query to force re-search
 	// Keep searchQuery and searchMode so user can re-search if needed
 }
 
