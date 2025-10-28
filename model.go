@@ -28,6 +28,7 @@ type delayedSearchMsg struct {
 
 type backToLogGroupsMsg struct{}
 type clearFormatStatusMsg struct{}
+type statusMsg string
 
 // Commands
 func backToLogGroupsCmd() tea.Msg {
@@ -140,8 +141,8 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.toggleFormat()
 			return m, cmd
 		case "F":
-			m.toggleFollow()
-			return m, nil // Return immediately after handling global keys
+			cmd := m.toggleFollow()
+			return m, cmd
 		}
 
 		if m.searchMode {
@@ -203,22 +204,38 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "G":
 				m.followMode = true
 				m.fixCursor()
+				// Start tick cycle for follow mode
+				return m, tea.Tick(time.Duration(m.config.RefreshInterval)*time.Second, func(t time.Time) tea.Msg {
+					return tickMsg(t)
+				})
 			case "H":
 				return m, m.fetchHistoryLogs()
+			case "c":
+				// Copy current log line to clipboard
+				return m, m.copyCurrentLine()
 			case "end":
 				// Jump to latest logs (same as G but more intuitive)
 				m.followMode = true
 				m.fixCursor()
+				// Start tick cycle for follow mode
+				return m, tea.Tick(time.Duration(m.config.RefreshInterval)*time.Second, func(t time.Time) tea.Msg {
+					return tickMsg(t)
+				})
 			}
 		}
 
 	case tickMsg:
-		return m, tea.Batch(
-			m.fetchLogs(),
-			tea.Tick(time.Duration(m.config.RefreshInterval)*time.Second, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			}),
-		)
+		// Only fetch logs and schedule next tick if follow mode is enabled
+		if m.followMode {
+			return m, tea.Batch(
+				m.fetchLogs(),
+				tea.Tick(time.Duration(m.config.RefreshInterval)*time.Second, func(t time.Time) tea.Msg {
+					return tickMsg(t)
+				}),
+			)
+		}
+		// If follow mode is disabled, don't schedule another tick
+		return m, nil
 
 	case delayedSearchMsg:
 		// Handle delayed search after buffer rollover
@@ -319,6 +336,11 @@ func (m *logModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearFormatStatusMsg:
 		// Clear the format status message after timeout
 		m.formatStatusMsg = ""
+		return m, nil
+		
+	case statusMsg:
+		// Set status message (will be displayed in status bar)
+		m.statusMessage = string(msg)
 		return m, nil
 	}
 
@@ -447,8 +469,8 @@ func (m *logModel) clearSearchState() {
 	// Keep searchQuery and searchMode so user can re-search if needed
 }
 
-// toggleFollow toggles auto-follow mode
-func (m *logModel) toggleFollow() {
+// toggleFollow toggles auto-follow mode and returns a command to start/stop ticking
+func (m *logModel) toggleFollow() tea.Cmd {
 	m.followMode = !m.followMode
 	if m.followMode {
 		// Jump to the latest log immediately
@@ -456,5 +478,11 @@ func (m *logModel) toggleFollow() {
 		if len(logs) > 0 {
 			m.cursor = len(logs) - 1
 		}
+		// Start the tick cycle for follow mode
+		return tea.Tick(time.Duration(m.config.RefreshInterval)*time.Second, func(t time.Time) tea.Msg {
+			return tickMsg(t)
+		})
 	}
+	// Follow mode disabled - no tick needed
+	return nil
 }

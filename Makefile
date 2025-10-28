@@ -67,6 +67,31 @@ release:
 	cd dist && shasum -a 256 *.tar.gz > checksums.txt
 	@echo "Release artifacts in dist/"
 
+# GoReleaser targets
+.PHONY: goreleaser-check
+goreleaser-check:
+	@if ! command -v goreleaser >/dev/null 2>&1; then \
+		echo "GoReleaser not installed. Install with:"; \
+		echo "  brew install goreleaser/tap/goreleaser"; \
+		echo "  or go install github.com/goreleaser/goreleaser@latest"; \
+		exit 1; \
+	fi
+
+.PHONY: release-dry-run
+release-dry-run: goreleaser-check
+	@echo "Running GoReleaser dry run..."
+	goreleaser release --snapshot --clean --skip=publish
+
+.PHONY: release-snapshot
+release-snapshot: goreleaser-check
+	@echo "Creating snapshot release..."
+	goreleaser release --snapshot --clean
+
+.PHONY: release-local
+release-local: goreleaser-check
+	@echo "Building local release..."
+	goreleaser build --clean
+
 # Clean targets
 .PHONY: clean
 clean:
@@ -98,7 +123,10 @@ help:
 	@echo "  test-coverage  - Run tests and generate HTML coverage report"
 	@echo "  lint           - Run linters (vet, fmt, golangci-lint)"
 	@echo "  fmt            - Format code"
-	@echo "  release        - Build release archives and checksums"
+	@echo "  release        - Build release archives and checksums (manual)"
+	@echo "  release-dry-run - Test GoReleaser configuration"
+	@echo "  release-snapshot - Create snapshot release with GoReleaser"
+	@echo "  release-local  - Build local release with GoReleaser"
 	@echo "  clean          - Remove build artifacts"
 	@echo "  run            - Build and run the application"
 	@echo "  deps           - Download and tidy dependencies"

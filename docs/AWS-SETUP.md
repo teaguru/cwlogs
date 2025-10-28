@@ -40,6 +40,18 @@ export AWS_SECRET_ACCESS_KEY=your-secret
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
+### Option 5: EC2 IAM Roles (Recommended for EC2)
+If running on EC2, attach an IAM role with CloudWatch permissions:
+```bash
+# No configuration needed - cwlogs will automatically use the IAM role and detect the region
+./cwlogs
+```
+
+**Features:**
+- Automatically uses EC2 instance IAM role
+- Auto-detects EC2 region from instance metadata
+- No AWS CLI setup required
+
 ## Required Permissions
 
 Your AWS user/role needs these CloudWatch permissions:
@@ -129,6 +141,9 @@ aws configure get region
 
 # List log groups in specific region
 aws logs describe-log-groups --region us-west-2
+
+# On EC2: cwlogs auto-detects region, but you can override
+./cwlogs default us-west-2
 ```
 
 ### Profile Management

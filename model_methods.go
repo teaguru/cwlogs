@@ -216,30 +216,20 @@ func (m *logModel) performSearch() {
 	// Always search full buffer, not just visible slice
 	logs := m.safeLogs()
 	for i, log := range logs {
-		// Search in both original message and clean display text (without ANSI codes)
-		searchTargets := []string{
-			log.OriginalMessage, // Always search the original CloudWatch message
-			stripANSI(log.Raw),  // Search the displayed content without ANSI escape codes
-		}
-
-		found := false
-		for _, target := range searchTargets {
-			if regex.MatchString(target) {
-				found = true
-				break
-			}
-		}
-
-		if found {
+		// Always search in the display text (what user sees) to ensure highlighting works
+		displayText := stripANSI(log.Raw)
+		
+		if regex.MatchString(displayText) {
 			m.matches = append(m.matches, i)
 		}
 	}
 
 	if len(m.matches) > 0 {
-		m.currentMatch = 0
+		// Start at the LAST match (most recent/latest log)
+		m.currentMatch = len(m.matches) - 1
 		// Defensive bounds check
-		if m.currentMatch < len(m.matches) {
-			m.cursor = m.matches[0]
+		if m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
+			m.cursor = m.matches[m.currentMatch]
 		}
 		m.followMode = false // Prevent tick from overwriting cursor
 		m.centerOnCursor()   // Center viewport on found match
@@ -252,12 +242,13 @@ func (m *logModel) performSearch() {
 	m.applyHighlights()
 }
 
-// nextMatch moves to the next search match
+// nextMatch moves to the next search match (backward in time to older logs)
 func (m *logModel) nextMatch() {
 	if len(m.matches) == 0 {
 		return
 	}
-	m.currentMatch = (m.currentMatch + 1) % len(m.matches)
+	// Go backward in the matches array (to older logs)
+	m.currentMatch = (m.currentMatch - 1 + len(m.matches)) % len(m.matches)
 	
 	// Bounds check before accessing matches array
 	if m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
@@ -268,12 +259,13 @@ func (m *logModel) nextMatch() {
 	m.applyHighlights()         // Refresh all highlights with new current match
 }
 
-// prevMatch moves to the previous search match
+// prevMatch moves to the previous search match (forward in time to newer logs)
 func (m *logModel) prevMatch() {
 	if len(m.matches) == 0 {
 		return
 	}
-	m.currentMatch = (m.currentMatch - 1 + len(m.matches)) % len(m.matches)
+	// Go forward in the matches array (to newer logs)
+	m.currentMatch = (m.currentMatch + 1) % len(m.matches)
 	
 	// Bounds check before accessing matches array
 	if m.currentMatch >= 0 && m.currentMatch < len(m.matches) {
@@ -417,10 +409,11 @@ func (m *logModel) View() string {
 		}
 	}
 
-	// Simple border without heavy width/height calculations
+	// Stable border with fixed width calculation
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(lipgloss.Color("8")).
+		Width(m.width - 4). // Fixed width: terminal width minus border chars
 		Padding(0, 1)
 
 	borderedLogs := borderStyle.Render(logContent.String())
@@ -433,6 +426,27 @@ func (m *logModel) View() string {
 		"",
 		borderedLogs,
 	)
+}
+
+// copyCurrentLine copies the current log line to clipboard
+func (m *logModel) copyCurrentLine() tea.Cmd {
+	logs := m.safeLogs()
+	if len(logs) == 0 || m.cursor < 0 || m.cursor >= len(logs) {
+		return func() tea.Msg {
+			return statusMsg("No log line to copy")
+		}
+	}
+	
+	// Get the current log line (use original unformatted message for copying)
+	logLine := logs[m.cursor].OriginalMessage
+	
+	// Copy to clipboard using different methods based on OS
+	return func() tea.Msg {
+		if err := copyToClipboard(logLine); err != nil {
+			return statusMsg(fmt.Sprintf("Failed to copy: %v", err))
+		}
+		return statusMsg("Log line copied to clipboard")
+	}
 }
 
 // applyHighlights precomputes highlighted lines for search matches
@@ -455,19 +469,20 @@ func (m *logModel) applyHighlights() {
 		if idx < 0 || idx >= len(logs) {
 			continue
 		}
-		original := logs[idx].Raw
-		clean := stripANSI(original)
+		
+		// Always highlight in the display text (what user sees)
+		displayText := stripANSI(logs[idx].Raw)
 
-		// Apply highlights to clean text - use different style for current match
+		// Apply highlights - use different style for current match
 		var highlighted string
 		if idx == currentMatchIdx {
 			// Current match gets special highlighting
-			highlighted = m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
+			highlighted = m.searchRegex.ReplaceAllStringFunc(displayText, func(match string) string {
 				return m.config.CurrentMatchStyle().Render(match)
 			})
 		} else {
 			// Regular matches get normal highlighting
-			highlighted = m.searchRegex.ReplaceAllStringFunc(clean, func(match string) string {
+			highlighted = m.searchRegex.ReplaceAllStringFunc(displayText, func(match string) string {
 				return m.config.HighlightStyle().Render(match)
 			})
 		}
@@ -504,17 +519,17 @@ func renderControlsBar(m *logModel) string {
 	
 	// Try different levels of detail based on available width
 	fullControls := fmt.Sprintf(
-		"/ search, Esc clear, n/N next, J fmt (%s), F follow (%s), H hist, %s",
+		"/ search, Esc clear, n/N next, c copy, J fmt (%s), F follow (%s), H hist, %s",
 		formatStatus, followStatus, essentialControls,
 	)
 	
 	mediumControls := fmt.Sprintf(
-		"/ search, n/N next, J fmt (%s), F follow (%s), %s",
+		"/ search, n/N next, c copy, J fmt (%s), F follow (%s), %s",
 		formatStatus, followStatus, essentialControls,
 	)
 	
 	shortControls := fmt.Sprintf(
-		"/ search, J fmt (%s), F follow (%s), %s",
+		"/ search, c copy, J fmt (%s), F follow (%s), %s",
 		formatStatus, followStatus, essentialControls,
 	)
 	

@@ -105,14 +105,33 @@ func main() {
 		fmt.Printf("Selected AWS profile: %s\n", profile)
 	}
 	
-	// Initialize region - use CLI override or let AWS profile determine default
+	// Initialize region - use CLI override, profile default, or auto-detect
 	var currentRegion string
 	if region != "" {
 		currentRegion = region
 		fmt.Printf("Region override: %s\n", currentRegion)
 	} else {
-		fmt.Printf("Using region from profile configuration\n")
-		// currentRegion stays empty, AWS SDK will use profile's default region
+		// Try to get region from AWS configuration
+		detectedRegion, err := getAWSRegion(profile)
+		if err != nil || detectedRegion == "" {
+			// If no region found and we're using "default" (likely EC2), try to auto-detect
+			if profile == "default" {
+				if ec2Region := getEC2Region(); ec2Region != "" {
+					currentRegion = ec2Region
+					fmt.Printf("Auto-detected EC2 region: %s\n", currentRegion)
+				} else {
+					// Fallback to us-east-1 if we can't detect
+					currentRegion = "us-east-1"
+					fmt.Printf("Using fallback region: %s (no region configured)\n", currentRegion)
+				}
+			} else {
+				fmt.Printf("Using region from profile configuration\n")
+				// currentRegion stays empty, AWS SDK will use profile's default region
+			}
+		} else {
+			currentRegion = detectedRegion
+			fmt.Printf("Using region from profile: %s\n", currentRegion)
+		}
 	}
 
 	// Main loop to allow going back to log group selection and changing regions
@@ -223,8 +242,8 @@ func startLogViewer(profile, logGroupName, region string, uiConfig *UIConfig) (i
 		highlighted:      make(map[int]string),     // Initialize highlighted cache
 	}
 
-	// Use alt-screen mode with mouse support for better display and copy/paste
-	p := tea.NewProgram(&model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	// Use alt-screen mode without mouse capture to allow normal text selection
+	p := tea.NewProgram(&model, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		return 0, err

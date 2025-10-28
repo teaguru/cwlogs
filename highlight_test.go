@@ -69,9 +69,9 @@ func TestCurrentMatchHighlighting(t *testing.T) {
 			t.Errorf("Expected 3 highlighted entries, got %d", len(model.highlighted))
 		}
 		
-		// Verify currentMatch was set correctly after search
-		if model.currentMatch != 0 {
-			t.Errorf("Expected currentMatch to be 0 after search, got %d", model.currentMatch)
+		// Verify currentMatch was set correctly after search (should be last match, index 2)
+		if model.currentMatch != 2 {
+			t.Errorf("Expected currentMatch to be 2 (last match) after search, got %d", model.currentMatch)
 		}
 		
 		// Check that current match has highlighting
@@ -114,17 +114,17 @@ func TestCurrentMatchHighlighting(t *testing.T) {
 		model.searchQuery = "test"
 		model.performSearch()
 		
-		// Verify initial state
-		if model.currentMatch != 0 {
-			t.Fatalf("Expected currentMatch to be 0, got %d", model.currentMatch)
+		// Verify initial state - should start at LAST match (index 2)
+		if model.currentMatch != 2 {
+			t.Fatalf("Expected currentMatch to be 2 (last match), got %d", model.currentMatch)
 		}
 		
-		// Act - move to next match
+		// Act - move to next match (goes backward to older logs)
 		model.nextMatch()
 		
-		// Assert - current match should have changed
+		// Assert - current match should have moved backward to index 1
 		if model.currentMatch != 1 {
-			t.Errorf("Expected currentMatch to be 1, got %d", model.currentMatch)
+			t.Errorf("Expected currentMatch to be 1 (moved backward), got %d", model.currentMatch)
 		}
 		
 		// Verify all matches still highlighted
@@ -152,18 +152,17 @@ func TestCurrentMatchHighlighting(t *testing.T) {
 		model.searchQuery = "test"
 		model.performSearch()
 		
-		// Move to second match first
-		model.nextMatch()
+		// Verify starts at last match (index 1)
 		if model.currentMatch != 1 {
-			t.Fatalf("Expected currentMatch to be 1, got %d", model.currentMatch)
+			t.Fatalf("Expected currentMatch to be 1 (last match), got %d", model.currentMatch)
 		}
 		
-		// Act - move to previous match
+		// Act - move to previous match (goes forward to newer, wraps to index 0)
 		model.prevMatch()
 		
-		// Assert - should be back to first match
+		// Assert - should wrap to first match (index 0)
 		if model.currentMatch != 0 {
-			t.Errorf("Expected currentMatch to be 0, got %d", model.currentMatch)
+			t.Errorf("Expected currentMatch to be 0 (wrapped forward), got %d", model.currentMatch)
 		}
 		
 		// Verify highlighting was updated
@@ -248,9 +247,9 @@ func TestCurrentMatchHighlighting(t *testing.T) {
 			t.Fatalf("Expected 2 matches, got %d", len(model.matches))
 		}
 		
-		// Current match should be 0
-		if model.currentMatch != 0 {
-			t.Fatalf("Expected currentMatch to be 0, got %d", model.currentMatch)
+		// Current match should start at last match (index 1)
+		if model.currentMatch != 1 {
+			t.Fatalf("Expected currentMatch to be 1 (last match), got %d", model.currentMatch)
 		}
 		
 		// Verify highlights exist for both matches
@@ -265,12 +264,12 @@ func TestCurrentMatchHighlighting(t *testing.T) {
 			t.Error("Second match should be highlighted")
 		}
 		
-		// Move to next match
+		// Move to next match (goes backward to older logs, index 0)
 		model.nextMatch()
 		
-		// Verify current match changed
-		if model.currentMatch != 1 {
-			t.Errorf("Expected currentMatch to be 1 after nextMatch, got %d", model.currentMatch)
+		// Verify current match moved backward to index 0
+		if model.currentMatch != 0 {
+			t.Errorf("Expected currentMatch to be 0 after nextMatch (moved backward), got %d", model.currentMatch)
 		}
 		
 		// Verify highlights still exist after navigation

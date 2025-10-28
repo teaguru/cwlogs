@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -61,7 +64,7 @@ func selectAWSProfile(uiConfig *UIConfig) (string, error) {
 		if _, err := config.LoadDefaultConfig(ctx); err == nil {
 			profileList = append(profileList, "default")
 		} else {
-			return "", fmt.Errorf("no AWS profiles found and default configuration failed: %w\n\nPlease run 'aws configure' or set up AWS credentials", err)
+			return "", fmt.Errorf("no AWS profiles found and default configuration failed: %w\n\nOptions to fix this:\n1. Run 'aws configure' to set up credentials\n2. Set environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY\n3. On EC2: attach an IAM role with CloudWatch permissions\n4. Use AWS SSO: 'aws configure sso'", err)
 		}
 	}
 
@@ -122,10 +125,17 @@ func listLogGroups(profile string, region ...string) ([]string, error) {
 func createCloudWatchClient(profile string, region ...string) (*cloudwatchlogs.Client, error) {
 	ctx := context.Background()
 	
-	// Start with profile configuration
-	configOptions := []func(*config.LoadOptions) error{
-		config.WithSharedConfigProfile(profile),
+	var configOptions []func(*config.LoadOptions) error
+	
+	// Only use shared config profile if it's not the fallback "default"
+	// This allows IAM roles on EC2 to work without requiring AWS CLI profiles
+	if profile != "default" {
+		configOptions = append(configOptions, config.WithSharedConfigProfile(profile))
 	}
+	// For "default", let AWS SDK use its default credential chain:
+	// 1. Environment variables
+	// 2. IAM roles (EC2, ECS, Lambda)
+	// 3. Shared credentials file
 	
 	// Override region if provided
 	if len(region) > 0 && region[0] != "" {
@@ -138,6 +148,78 @@ func createCloudWatchClient(profile string, region ...string) (*cloudwatchlogs.C
 	}
 	
 	return cloudwatchlogs.NewFromConfig(cfg), nil
+}
+
+// getAWSRegion tries to get the region from AWS configuration
+func getAWSRegion(profile string) (string, error) {
+	ctx := context.Background()
+	
+	var configOptions []func(*config.LoadOptions) error
+	if profile != "default" {
+		configOptions = append(configOptions, config.WithSharedConfigProfile(profile))
+	}
+	
+	cfg, err := config.LoadDefaultConfig(ctx, configOptions...)
+	if err != nil {
+		return "", err
+	}
+	
+	return cfg.Region, nil
+}
+
+// getEC2Region attempts to get the current EC2 instance's region from metadata
+func getEC2Region() string {
+	// Try EC2 instance metadata service (IMDSv2)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	
+	// First get the token for IMDSv2
+	tokenReq, err := http.NewRequestWithContext(ctx, "PUT", "http://169.254.169.254/latest/api/token", nil)
+	if err != nil {
+		return ""
+	}
+	tokenReq.Header.Set("X-aws-ec2-metadata-token-ttl-seconds", "21600")
+	
+	client := &http.Client{Timeout: 2 * time.Second}
+	tokenResp, err := client.Do(tokenReq)
+	if err != nil {
+		return ""
+	}
+	defer tokenResp.Body.Close()
+	
+	if tokenResp.StatusCode != 200 {
+		return ""
+	}
+	
+	tokenBytes, err := io.ReadAll(tokenResp.Body)
+	if err != nil {
+		return ""
+	}
+	token := string(tokenBytes)
+	
+	// Now get the region using the token
+	regionReq, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/latest/meta-data/placement/region", nil)
+	if err != nil {
+		return ""
+	}
+	regionReq.Header.Set("X-aws-ec2-metadata-token", token)
+	
+	regionResp, err := client.Do(regionReq)
+	if err != nil {
+		return ""
+	}
+	defer regionResp.Body.Close()
+	
+	if regionResp.StatusCode != 200 {
+		return ""
+	}
+	
+	regionBytes, err := io.ReadAll(regionResp.Body)
+	if err != nil {
+		return ""
+	}
+	
+	return strings.TrimSpace(string(regionBytes))
 }
 
 // selectAWSRegion lets user select an AWS region

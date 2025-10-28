@@ -13,21 +13,30 @@ A fast, terminal-based viewer for AWS CloudWatch logs with real-time streaming a
 
 ## Installation
 
-### Prerequisites
+### Homebrew (macOS) - Recommended
 
+```bash
+brew tap teaguru/cwlogs
+brew install cwlogs
+```
+
+### Direct Download
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/teaguru/cwlogs/releases).
+
+### Build from Source
+
+**Prerequisites:**
 - Go 1.19 or later
 - AWS CLI configured with appropriate permissions
 - Access to CloudWatch Logs
-
-### Build from Source
+- **For clipboard support on Linux:** `xclip`, `xsel`, or `wl-clipboard` package
 
 ```bash
 git clone https://github.com/teaguru/cwlogs.git
 cd cwlogs
 make build
 ```
-
-Or use `go build` directly if Make is unavailable.
 
 ## Usage
 
@@ -96,15 +105,19 @@ make help         # Show all targets
 
 #### Search
 - `/` - Start search
-- `Enter` - Execute search
-- `n` - Next match
-- `N` - Previous match
+- `Enter` - Execute search (starts at latest/newest match)
+- `n` - Next match (backward to older logs)
+- `N` - Previous match (forward to newer logs)
 - `Esc` - Clear search
 
 #### Display Options
 - `J` - Toggle between Raw and Formatted modes
 - `F` - Toggle follow mode (auto-scroll to new logs)
 - `H` - Load more history
+
+#### Copy Text
+- `c` - Copy current log line to clipboard (original unformatted message)
+- **Mouse/trackpad** - Select any text and copy with Cmd+C/Ctrl+C
 
 #### Other
 - `b` or `Backspace` - Go back to log group selection
@@ -254,6 +267,24 @@ aws sso login --profile company-admin
 - Use `n/N` to navigate through multiple matches
 - Clear search (`Esc`) to return to normal browsing
 
+### Copy and Share Logs
+
+**Method 1: Keyboard shortcut**
+- Press `c` to copy the current log line to clipboard
+- Works on macOS (pbcopy), Linux (xclip/xsel/wl-copy), and Windows (clip)
+- **Always copies the original unformatted CloudWatch message** (even in formatted mode)
+- Status message confirms successful copy
+
+**Method 2: Mouse/trackpad selection**
+- Select text with mouse or trackpad (drag to highlight)
+- Copy with `Cmd+C` (macOS) or `Ctrl+C` (Linux/Windows)
+- Works with any text in the terminal, including partial lines
+- Copies the formatted display text (what you see on screen)
+
+**Why use keyboard vs mouse?**
+- **Keyboard (`c`)**: Gets the original CloudWatch message - perfect for debugging, sharing with team, or pasting into other tools
+- **Mouse selection**: Gets the formatted display text - useful for copying specific parts or formatted output
+
 ### Performance Tips
 
 - The viewer maintains only the last 5000 logs in memory
@@ -284,6 +315,7 @@ aws sso login --profile <your-profile>
 - Check your AWS region is set: `aws configure get region`
 - Verify credentials: `aws sts get-caller-identity`
 - For environment variables, ensure all required vars are set
+- **On EC2**: Ensure the instance has an IAM role with CloudWatch permissions attached
 
 **"No log groups found" (region-specific)**
 - Verify you're looking in the correct region: `./cwlogs profile us-west-2`

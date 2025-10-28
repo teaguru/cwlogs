@@ -1,0 +1,174 @@
+version: 2
+
+project_name: cwlogs
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+    binary: cwlogs
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- .Version }}-
+      {{- title .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+
+release:
+  github:
+    owner: teaguru
+    name: cwlogs
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} {{.Version}}"
+  header: |
+    ## CloudWatch Log Viewer {{.Version}}
+    
+    Fast, terminal-based AWS CloudWatch log viewer with search, filtering, and multi-region support.
+    
+    ### Installation
+    
+    **Homebrew (macOS):**
+    ```bash
+    brew tap teaguru/cwlogs
+    brew install cwlogs
+    ```
+    
+    **Debian/Ubuntu (APT):**
+    ```bash
+    # Download and install .deb package
+    wget https://github.com/teaguru/cwlogs/releases/download/{{.Tag}}/cwlogs_{{.Version}}_linux_amd64.deb
+    sudo dpkg -i cwlogs_{{.Version}}_linux_amd64.deb
+    ```
+    
+    **RedHat/CentOS/Fedora (RPM):**
+    ```bash
+    # Download and install .rpm package
+    wget https://github.com/teaguru/cwlogs/releases/download/{{.Tag}}/cwlogs_{{.Version}}_linux_amd64.rpm
+    sudo rpm -i cwlogs_{{.Version}}_linux_amd64.rpm
+    ```
+    
+    **Arch Linux:**
+    ```bash
+    # Download and install with pacman
+    wget https://github.com/teaguru/cwlogs/releases/download/{{.Tag}}/cwlogs_{{.Version}}_linux_amd64.pkg.tar.xz
+    sudo pacman -U cwlogs_{{.Version}}_linux_amd64.pkg.tar.xz
+    ```
+    
+
+    
+    **Direct Download:**
+    Download the appropriate binary for your platform from the assets below.
+
+brews:
+  - name: cwlogs
+    repository:
+      owner: teaguru
+      name: homebrew-cwlogs
+      branch: main
+    homepage: "https://github.com/teaguru/cwlogs"
+    description: "Fast, terminal-based AWS CloudWatch log viewer"
+    license: "Apache-2.0"
+    test: |
+      system "#{bin}/cwlogs --help"
+    install: |
+      bin.install "cwlogs"
+
+# Linux package managers
+nfpms:
+  - id: packages
+    package_name: cwlogs
+    vendor: teaguru
+    homepage: "https://github.com/teaguru/cwlogs"
+    maintainer: "teaguru"
+    description: "Fast, terminal-based AWS CloudWatch log viewer with search, filtering, and multi-region support"
+    license: "Apache-2.0"
+    formats:
+      - deb      # Debian/Ubuntu (apt)
+      - rpm      # RedHat/CentOS/Fedora (yum/dnf)
+      - apk      # Alpine Linux
+      - archlinux # Arch Linux (pacman)
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    dependencies:
+      - ca-certificates  # For AWS API calls
+    suggests:
+      - awscli          # AWS CLI for configuration
+    contents:
+      - src: ./README.md
+        dst: /usr/share/doc/cwlogs/README.md
+      - src: ./LICENSE
+        dst: /usr/share/doc/cwlogs/LICENSE
+    # scripts:
+    #   postinstall: "scripts/postinstall.sh"
+
+# Snapcraft (Ubuntu Snap Store) - disabled until snapcraft is available
+# snapcrafts:
+#   - name: cwlogs
+#     summary: Fast CloudWatch log viewer
+#     description: |
+#       Fast, terminal-based AWS CloudWatch log viewer with search, filtering, 
+#       and multi-region support. View, search, and follow CloudWatch logs 
+#       directly from your terminal.
+#     grade: stable
+#     confinement: strict
+#     publish: false  # Set to true when ready to publish to Snap Store
+#     license: "Apache-2.0"
+#     base: core22
+#     apps:
+#       cwlogs:
+#         command: cwlogs
+#         plugs: ["home", "network"]
+
+# Skip signing by default - can be enabled later if needed
+signs:
+  - artifacts: none
+
+# Docker images (optional - can be enabled later)
+# dockers:
+#   - image_templates:
+#       - "ghcr.io/teaguru/cwlogs:{{ .Version }}"
+#       - "ghcr.io/teaguru/cwlogs:latest"
+#     dockerfile: Dockerfile
+#     build_flag_templates:
+#       - "--pull"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"

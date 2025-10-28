@@ -38,6 +38,8 @@
 - `J` - Toggle between Raw and Formatted modes
 - `F` - Toggle follow mode (auto-scroll)
 - `H` - Load more history
+- `c` - Copy current log line to clipboard (original unformatted message)
+- **Mouse selection** - Drag to select text, then Cmd+C/Ctrl+C to copy
 - `b` - Back to log group selection
 - `q` - Quit application
 
