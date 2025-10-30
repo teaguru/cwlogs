@@ -97,7 +97,7 @@ release:
     **Direct Download:**
     Download the appropriate binary for your platform from the assets below.
 
-homebrew:
+brews:
   - name: cwlogs
     repository:
       owner: teaguru
