@@ -21,7 +21,9 @@ builds:
     binary: cwlogs
 
 archives:
-  - format: tar.gz
+  - format_overrides:
+      - goos: windows
+        format: zip
     name_template: >-
       {{ .ProjectName }}-
       {{- .Version }}-
@@ -38,7 +40,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -95,7 +97,7 @@ release:
     **Direct Download:**
     Download the appropriate binary for your platform from the assets below.
 
-brews:
+homebrew:
   - name: cwlogs
     repository:
       owner: teaguru
